@@ -123,7 +123,7 @@
       </main>
       <footer class="panel-footer">
         <button class="btn btn-resetuser" @click.stop="employeeClear">{{ t('換人生產') }}</button>
-        <!-- <button class="btn btn-reset" @click.stop="refresh">{{ t('重整') }} (Reset)</button> -->
+        <button class="btn btn-reset" @click.stop="resetAll">{{ t('重整') }} (Reset)</button>
         <button class="btn btn-execute" @click.stop="forceExecute">{{ t('強制執行') }}</button>
         <button class="btn btn-complete" @click.stop="completeAllScanned">{{ t('完成') }} (Complete)</button>
       </footer>
@@ -282,15 +282,22 @@ let socket = null;
 function connectWebSocket() {
   socket = new WebSocket(wsUrl);
   
+  const timeoutMs = 1000;
+  const timer = setTimeout(() => {
+    if (socket && socket.readyState === WebSocket.CONNECTING) socket.close(4000, "connect timeout");
+  }, timeoutMs);
+
+  
   socket.onopen = () => { 
     console.log("WS Connected");
+    clearTimeout(timer);
     startHeartbeat(); // ✅ 開始送 heartbeat
     restoreState();
   }
 
   socket.onmessage = (event) => {
     try {
-      const message = JSON.parse(event.data)
+      const message = JSON.parse(event.data);
       if (message.type === "data") {
         // Process PLC state
         if (message.source === "PLC_MONITOR") {
@@ -321,7 +328,7 @@ function connectWebSocket() {
       }
       else if (message.type === "control" && message.command === "HEARTBEAT_ACK") {
         lastHeartbeatAck.value = message.payload?.server_ts || Date.now();
-        console.log("[HB] ack", message.payload);
+        // console.log("[HB] ack", message.payload);
         return;
       }
       else if (message.type === "control" && message.command === "STATE_SYNC") {
@@ -431,6 +438,19 @@ const patchSet = (path, value) => {queuePatch({ op:"SET", path, value })}
 const patchDictSet = (path, key, value) => {queuePatch({ op:"DICT_SET", path, key, value })}
 const patchListUnshift = (path, value, max_len=500) => {queuePatch({ op:"LIST_UNSHIFT", path, value, max_len })}
 
+const Ajax = async (url, options, time) => {
+  const controller = new AbortController();
+  setTimeout(() => {
+    controller.abort();
+  }, time);
+  let config = { ...options, signal: controller.signal };
+  
+  let response = await fetch(url, config);
+  let responseJson = await response.json();
+  return responseJson;
+}
+
+
 // --- Custom Modal --- //
 const customModal = ref(null);
 const modalMessage = ref('');
@@ -497,32 +517,34 @@ async function validateEmpId(empId) {
 async function validateWorkOrder(workOrder) {
   let res, res_json;
   try {
-    res = await fetch(`${OIS_API_BASE}/Read_2DID`, { method: "POST", headers, body: JSON.stringify({ emp_no: info.employeeId, workorder: workOrder }) });
-    res_json = await res.json();
-    if (res_json.success && res_json.data) {
-      const pdcodedata = res_json.pdcode_data;
-      info.cmd236_flag = pdcodedata.cmd236_Flag;
-      patchSet(["info","cmd236_flag"], info.cmd236_flag);
-      return {
-        workorder: pdcodedata.workOrder,
-        item: pdcodedata.item,
-        workStep: pdcodedata.work_step,
-        sht_no: pdcodedata.sht_no,
-        panel_no: pdcodedata.panel_no,
-        twodid_step: pdcodedata.twodid_step,
-        twodid_type: pdcodedata.twodid_type,
-        twodid_input: pdcodedata.twodid_input,
-        panel_num: pdcodedata.panel_num
-      }
-    }
+    // res = await fetch(`${OIS_API_BASE}/Read_2DID`, { method: "POST", headers, body: JSON.stringify({ emp_no: info.employeeId, workorder: workOrder }) });
+    // res_json = await res.json();
+    // if (res_json.success && res_json.data) {
+    //   const pdcodedata = res_json.pdcode_data;
+    //   info.cmd236_flag = pdcodedata.cmd236_Flag;
+    //   patchSet(["info","cmd236_flag"], info.cmd236_flag);
+    //   return {
+    //     workorder: pdcodedata.workOrder,
+    //     item: pdcodedata.item,
+    //     workStep: pdcodedata.work_step,
+    //     sht_no: pdcodedata.sht_no,
+    //     panel_no: pdcodedata.panel_no,
+    //     twodid_step: pdcodedata.twodid_step,
+    //     twodid_type: pdcodedata.twodid_type,
+    //     twodid_input: pdcodedata.twodid_input,
+    //     panel_num: pdcodedata.panel_num
+    //   }
+    // }
 
-    res = await fetch(`${OIS_API_BASE}/workorder`, { method: 'POST', headers, body: JSON.stringify({ emp_no: info.employeeId, workorder: workOrder }) });
-    res_json = await res.json();
+    // res = await fetch(`${OIS_API_BASE}/workorder`, { method: 'POST', headers, body: JSON.stringify({ emp_no: info.employeeId, workorder: workOrder }) });
+    // res_json = await res.json();
+    res_json = {success: 200, result: {result: "OK;\r\nYD18379-04-A-A;13;4240912012548;4240912012548;28;N;OK;\r\nYD18379-04-A-A;13;4240912013144;4240912013144;28;N;OK;\r\nYD18379-04-A-A;13;4240913025717;4240913025717;28;Y;NG;\r\nYD18379-04-A-A;13;4240913025833;4240913025833;28;Y;NG;\r\nYD18379-04-A-A;13;4240913025834;4240913025834;28;Y;NG;\r\nYD18379-04-A-A;13;4240914000471;4240914000471;28;N;OK;\r\nYD18379-04-A-A;13;4240914001156;4240914001156;28;N;OK;\r\nYD18379-04-A-A;13;4240914016025;4240914016025;29;N;OK;\r\nYD18379-04-A-A;13;999999999997;999999999999;28;N;OK;\r\nYD18379-04-A-A;13;999999999997;9999999999999;28;Y;NG;\r\nYD18379-04-A-A;13;999999999998;9999999999999;28;Y;NG;\r\nYD18379-04-A-A;13;999999999999;9999999999999;28;Y;NG;\r\nYD18379-04-A-A;13;9999999999994;9999999999996;28;Y;NG;\r\nYD18379-04-A-A;13;9999999999995;9999999999996;28;Y;NG;\r\nYD18379-04-A-A;13;9999999999996;9999999999996;28;Y;NG;\r\nYD18379-04-A-A;13;9999999999997;9999999999999;28;Y;NG;\r\nYD18379-04-A-A;13;9999999999998;9999999999999;28;Y;NG;\r\nYD18379-04-A-A;13;9999999999999;9999999999999;28;Y;NG;"}};
     info.cmd236_flag = false;
     patchSet(["info","cmd236_flag"], info.cmd236_flag);
     if (res_json.success && res_json.result.result.startsWith("OK")) {
-      const lines = res_json.result.result.slice(3).split("\r\n");
-      let workorder = workOrder, item = lines[0][0], workStep = lines[0][1], panel_num = lines.length;
+      const lines = res_json.result.result.slice(5).split("\r\n");
+      const info = lines[0].split(";");
+      let workorder = workOrder, item = info[0], workStep = info[1], panel_num = lines.length;
       let sht_no = [], panel_no = [], twodid_step = [], twodid_type = [], twodid_input = [];
       for (const line of lines) {
         const parts = line.split(";");
@@ -541,7 +563,8 @@ async function validateWorkOrder(workOrder) {
     patchSet(["info","cmd236_flag"], info.cmd236_flag);
     if (res_json.success && res_json.result.result.startsWith("OK")) {
       const lines = res_json.result.result.slice(3).split("\r\n");
-      let workorder = workOrder, item = lines[0][1], workStep = lines[0][2], panel_num = lines[0][8];
+      const info = lines[0].split(";");
+      let workorder = workOrder, item = info[1], workStep = info[2], panel_num = info[8];
       let sht_no = [], panel_no = [], twodid_step = [], twodid_type = [], twodid_input = [];
       for (const line of lines) {
         const parts = line.split(";");
@@ -706,7 +729,8 @@ const handleInfoInput = async (data) => {
   if (!value) return;
 
   if (stage.value === "empId") {
-    const result = await validateEmpId(value);
+    // const result = await validateEmpId(value);
+    const result = {empNo: "12868", empName: "王巨成"};
 
     if (!result) return;
 
@@ -872,24 +896,32 @@ function scanedSheetRecord(platform) {
 }
 
 const NGSheetReport = async (pdcode, panel_no, status) => {
-  if (expected_2DID_dict[pdcode] && !scanned_2DID_dict[pdcode]) {
-    scanned_2DID_dict[pdcode] = { timestamp: Date.now(), ret_type: "NG", workOrder: info.workOrder, item: info.productItem, detail: status }; patchDictSet(["scanned_2DID_dict"], pdcode, { ...scanned_2DID_dict[pdcode] });
-    await UploadSheet(pdcode, panel_no, "NG", status);
-    info.NG_num += 1; patchSet(["info","NG_num"], info.NG_num);
+  try{
+    if (expected_2DID_dict[pdcode] && !scanned_2DID_dict[pdcode]) {
+      scanned_2DID_dict[pdcode] = { timestamp: Date.now(), ret_type: "NG", workOrder: info.workOrder, item: info.productItem, detail: status }; patchDictSet(["scanned_2DID_dict"], pdcode, { ...scanned_2DID_dict[pdcode] });
+      await UploadSheet(pdcode, panel_no, "NG", status);
+      info.NG_num += 1; patchSet(["info","NG_num"], info.NG_num);
+    }
+    else if (!other_2DID_dict[pdcode]){
+      await UploadSheet(pdcode, panel_no, "NG", status);
+    }
   }
-  else if (!other_2DID_dict[pdcode]){
-    await UploadSheet(pdcode, panel_no, "NG", status);
+  catch (error) {
+    console.error("寫入 NG 狀態失敗:", error);
+    await showCustomModal("製品 NG 狀態上傳失敗，請確認網路連線！");
   }
 }
 
 const UploadSheet = async (pdcode, panel_no, ret_type, status) => {
   const payload = { emp_no: info.employeeId, workOrder: info.workOrder, partno: info.productItem, work_step: info.workStep, sht_no: pdcode, panel_no: panel_no, twodid_type: ret_type, remark: status };
-  try {
-    await fetch(`${OIS_API_BASE}/write2did`, { method: "POST", headers, body: JSON.stringify(payload) });
-  }
-  catch (error) {
-    console.error("寫入 NG 狀態失敗:", error);
-  }
+  await Ajax(`${OIS_API_BASE}/write2did`, { method: "POST", headers, body: JSON.stringify(payload) }, 1500);
+  // await fetch(`${OIS_API_BASE}/write2did`, { method: "POST", headers, body: JSON.stringify(payload) });
+  // try {
+  //   await fetch(`${OIS_API_BASE}/write2did`, { method: "POST", headers, body: JSON.stringify(payload) });
+  // }
+  // catch (error) {
+  //   console.error("寫入 NG 狀態失敗:", error);
+  // }
 }
 
 // --- Button Control --- //
@@ -922,17 +954,20 @@ const completeAllScanned = async () => {
     return;
   }
 
-  for (const [key, value] of Object.entries(expected_2DID_dict)) {
-    if (!scanned_2DID_dict[key]) {
-      await UploadSheet(key, value.panel_no, "NG", "未投入，作業結束");
-    }
-  }
-
   try {
+    console.log("fill other products NG");
+    for (const [key, value] of Object.entries(expected_2DID_dict)) {
+      if (!scanned_2DID_dict[key]) {
+        await UploadSheet(key, value.panel_no, "NG", "未投入，作業結束");
+      }
+    }
+    console.log("request API");
     await fetch(`${OIS_API_BASE}/Delete_2DID`, { method: "POST", headers, body: JSON.stringify({ workorder: info.workOrder }) });
   }
   catch (error) {
-    console.error("清除 2DID 資料失敗")
+    console.error("清除 2DID 資料失敗");
+    await showCustomModal("工單上傳失敗，請確認網路連線！");
+    return;
   }
 
   await showCustomModal("作業已完成！");

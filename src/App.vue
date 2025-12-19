@@ -444,7 +444,7 @@ const Ajax = async (url, options, time) => {
     controller.abort();
   }, time);
   let config = { ...options, signal: controller.signal };
-  
+
   let response = await fetch(url, config);
   let responseJson = await response.json();
   return responseJson;
@@ -542,8 +542,8 @@ async function validateWorkOrder(workOrder) {
     info.cmd236_flag = false;
     patchSet(["info","cmd236_flag"], info.cmd236_flag);
     if (res_json.success && res_json.result.result.startsWith("OK")) {
-      const lines = res_json.result.result.slice(5).split("\r\n");
-      const info = lines[0].split(";");
+      const lines = res_json.result.result.split("\r\n").slice(1);
+      const info = lines[1].split(";");
       let workorder = workOrder, item = info[0], workStep = info[1], panel_num = lines.length;
       let sht_no = [], panel_no = [], twodid_step = [], twodid_type = [], twodid_input = [];
       for (const line of lines) {
@@ -562,8 +562,8 @@ async function validateWorkOrder(workOrder) {
     info.cmd236_flag = true;
     patchSet(["info","cmd236_flag"], info.cmd236_flag);
     if (res_json.success && res_json.result.result.startsWith("OK")) {
-      const lines = res_json.result.result.slice(3).split("\r\n");
-      const info = lines[0].split(";");
+      const lines = res_json.result.result.split("\r\n").slice(1);
+      const info = lines[1].split(";");
       let workorder = workOrder, item = info[1], workStep = info[2], panel_num = info[8];
       let sht_no = [], panel_no = [], twodid_step = [], twodid_type = [], twodid_input = [];
       for (const line of lines) {
@@ -603,7 +603,7 @@ async function validate2DID(twodid) {
 
     const scanned_record = scanned_2DID_dict[twodid];
     if (scanned_record && Date.now() - scanned_record.timestamp > unloadPeriodThreshold) {
-      await NGSheetReport(twodid, sheet_info.panel_no, "重工");
+      // await NGSheetReport(twodid, sheet_info.panel_no, "重工");
       return { ret_type: "NG", workOrder: info.workOrder, item: info.productItem, detail: "重工" };
     }
     return { ret_type: "OK", workOrder: info.workOrder, item: info.productItem, detail: "" };
@@ -729,8 +729,8 @@ const handleInfoInput = async (data) => {
   if (!value) return;
 
   if (stage.value === "empId") {
-    // const result = await validateEmpId(value);
-    const result = {empNo: "12868", empName: "王巨成"};
+    const result = await validateEmpId(value);
+    // const result = {empNo: "12868", empName: "王巨成"};
 
     if (!result) return;
 
@@ -817,7 +817,16 @@ const processControl = async (data, source) => {
   // Check product validate
   let targetSheet = (source.startsWith("CAMERA_RIGHT") || source.startsWith("CAMERA_LEFT")) ? value : null;
   let validResult = await validate2DID(targetSheet);
-  const rec = { timestamp: Date.now(), ret_type: validResult.ret_type, workOrder: validResult.workOrder, item: validResult.item, detail: validResult.detail };
+  let rec = { timestamp: Date.now(), ret_type: validResult.ret_type, workOrder: validResult.workOrder, item: validResult.item, detail: validResult.detail };
+
+  const two_camera_pass = rec.ret_type == "OK" && ((targetPlatform.left.ret_type == 'OK' && source.startsWith("CAMERA_RIGHT")) || (targetPlatform.right.ret_type && source.startsWith("CAMERA_LEFT")))
+  if (info.OK_num === info.panel_num || ((info.OK_num == info.panel_num - 1) && two_camera_pass)) {
+    if (rec.ret_type == "OK") {
+      rec.ret_type = "NG";
+      rec.detail = "超過 PANEL 上限"
+    }
+    await showCustomModal(`已達 PANEL 數上限，因此無法綁定。`);
+  }
 
   // Filtered short period repeated 2DID for frontend log
   const sheet_history = (source.startsWith("CAMERA_LEFT")) ? side_history_2DID_dict.left[value] : side_history_2DID_dict.right[value];
@@ -858,10 +867,13 @@ const processControl = async (data, source) => {
     }
   }
 
-  if (forceCommand.command === true && (forceCommand.triggerTime && Date.now() - forceCommand.triggerTime < forceTriggerPeriod) && (targetPlatform.left.ret_type === "OK" || targetPlatform.right.ret_type === "OK")) {
+  // Send M86, M87 command to PLC
+  const oneSheetNG = targetPlatform.left.ret_type == "NG" || targetPlatform.right.ret_type == "NG";
+  const lastoneSheetOK = !oneSheetNG && (targetPlatform.left.ret_type === "OK" || targetPlatform.right.ret_type === "OK");
+  if (!oneSheetNG && forceCommand.command === true && (forceCommand.triggerTime && Date.now() - forceCommand.triggerTime < forceTriggerPeriod) && (targetPlatform.left.ret_type === "OK" || targetPlatform.right.ret_type === "OK")) {
     sendSocketMessage("GO_NOGO", 1);
   }
-  else if (stage.value == "twoDID" && targetPlatform.left.ret_type === "OK" && targetPlatform.right.ret_type === "OK") {
+  else if (stage.value == "twoDID" && ((targetPlatform.left.ret_type === "OK" && targetPlatform.right.ret_type === "OK") || ((info.OK_num == info.panel_num - 1) && lastoneSheetOK))) {
     sendSocketMessage("GO_NOGO", 1);
   }
   else {
@@ -938,6 +950,10 @@ async function forceExecute() {
     return;
   }
 
+  if (info.OK_num == info.panel_num || ((info.OK_num == info.panel_num - 1) && targetPlatform.left.ret_type === "OK" && targetPlatform.right.ret_type === "OK")) {
+    await showCustomModal("作業後將達 PANEL 數上限，因此無法繼續執行。");
+  }
+
   if (targetPlatform.left.ret_type === "OK" || targetPlatform.right.ret_type === "OK") {
     forceCommand.command = true; patchSet(["forceCommand","command"], forceCommand.command);
     forceCommand.triggerTime = Date.now(); patchSet(["forceCommand","triggerTime"], forceCommand.triggerTime);
@@ -954,23 +970,25 @@ const completeAllScanned = async () => {
     return;
   }
 
-  try {
-    console.log("fill other products NG");
-    for (const [key, value] of Object.entries(expected_2DID_dict)) {
-      if (!scanned_2DID_dict[key]) {
-        await UploadSheet(key, value.panel_no, "NG", "未投入，作業結束");
+  if (info.cmd236_flag == false){
+    try {
+      console.log("fill other products NG");
+      for (const [key, value] of Object.entries(expected_2DID_dict)) {
+        if (!scanned_2DID_dict[key]) {
+          await UploadSheet(key, value.panel_no, "NG", "未投入，作業結束");
+        }
       }
+      console.log("request API");
+      await fetch(`${OIS_API_BASE}/Delete_2DID`, { method: "POST", headers, body: JSON.stringify({ workorder: info.workOrder }) });
     }
-    console.log("request API");
-    await fetch(`${OIS_API_BASE}/Delete_2DID`, { method: "POST", headers, body: JSON.stringify({ workorder: info.workOrder }) });
-  }
-  catch (error) {
-    console.error("清除 2DID 資料失敗");
-    await showCustomModal("工單上傳失敗，請確認網路連線！");
-    return;
+    catch (error) {
+      console.error("清除 2DID 資料失敗");
+      await showCustomModal("工單上傳失敗，請確認網路連線！");
+      return;
+    }
+    await showCustomModal("作業已完成！");
   }
 
-  await showCustomModal("作業已完成！");
   resetAll();
 }
 

@@ -145,7 +145,6 @@
 </template>
 
 <script setup>
-// restoreState, handleResetAll function need implement
 import { ref, onMounted, onUnmounted, computed, nextTick, watch, reactive } from 'vue';
 import logo from "@/components/icons/flexium_logo.png"
 
@@ -310,10 +309,6 @@ function connectWebSocket() {
         else if (message.source === "info") {
           console.log("WebSocket Info: ", message.message);
         }
-        // Test command
-        else if (message.source === "command" && message.payload === "RESET") {
-          resetAll();
-        }
         // Process infomation input from keyboard
         else if (message.source === "SCANNER") {
           handleInfoInput(message.payload);
@@ -411,33 +406,7 @@ function stopHeartbeat() {
   }
 } 
 
-// Helper
-let patchBuffer = []
-let patchTimer = null
-function queuePatch(ev){
-  patchBuffer.push({ ...ev, ts: Date.now() })
-  // 20~50ms 合併成一包，避免太碎
-  if (!patchTimer){
-    patchTimer = setTimeout(() => {
-      sendSocketMessage("STATE_PATCH", { events: patchBuffer });
-      patchBuffer = [];
-      patchTimer = null;
-    }, 30)
-  }
-}
-
 // ---- wrappers ----
-const patchDictDel = (path, key) => {queuePatch({ op:"DICT_DEL", path, key })}
-const patchDictClear = (path) => {patchSet(path, {})}
-const patchListClear = (path) => {queuePatch({ op:"LIST_CLEAR", path })}
-const patchResetAll = () => {queuePatch({ op:"RESET_ALL" })}
-
-const patchListSet = (path, index, value) => {queuePatch({ op:"LIST_SET", path, index, value })}
-const patchListClearAndInit = (path, initList=[]) => {patchSet(path, initList)}
-const patchSet = (path, value) => {queuePatch({ op:"SET", path, value })}
-const patchDictSet = (path, key, value) => {queuePatch({ op:"DICT_SET", path, key, value })}
-const patchListUnshift = (path, value, max_len=500) => {queuePatch({ op:"LIST_UNSHIFT", path, value, max_len })}
-
 const Ajax = async (url, options, time) => {
   const controller = new AbortController();
   setTimeout(() => {
@@ -449,7 +418,6 @@ const Ajax = async (url, options, time) => {
   let responseJson = await response.json();
   return responseJson;
 }
-
 
 // --- Custom Modal --- //
 const customModal = ref(null);
@@ -522,7 +490,6 @@ async function validateWorkOrder(workOrder) {
     // if (res_json.success && res_json.data) {
     //   const pdcodedata = res_json.pdcode_data;
     //   info.cmd236_flag = pdcodedata.cmd236_Flag;
-    //   patchSet(["info","cmd236_flag"], info.cmd236_flag);
     //   return {
     //     workorder: pdcodedata.workOrder,
     //     item: pdcodedata.item,
@@ -531,7 +498,6 @@ async function validateWorkOrder(workOrder) {
     //     panel_no: pdcodedata.panel_no,
     //     twodid_step: pdcodedata.twodid_step,
     //     twodid_type: pdcodedata.twodid_type,
-    //     twodid_input: pdcodedata.twodid_input,
     //     panel_num: pdcodedata.panel_num
     //   }
     // }
@@ -540,41 +506,37 @@ async function validateWorkOrder(workOrder) {
     // res_json = await res.json();
     res_json = {success: 200, result: {result: "OK;\r\nYD18379-04-A-A;13;4240912012548;4240912012548;28;N;OK;\r\nYD18379-04-A-A;13;4240912013144;4240912013144;28;N;OK;\r\nYD18379-04-A-A;13;4240913025717;4240913025717;28;Y;NG;\r\nYD18379-04-A-A;13;4240913025833;4240913025833;28;Y;NG;\r\nYD18379-04-A-A;13;4240913025834;4240913025834;28;Y;NG;\r\nYD18379-04-A-A;13;4240914000471;4240914000471;28;N;OK;\r\nYD18379-04-A-A;13;4240914001156;4240914001156;28;N;OK;\r\nYD18379-04-A-A;13;4240914016025;4240914016025;29;N;OK;\r\nYD18379-04-A-A;13;999999999997;999999999999;28;N;OK;\r\nYD18379-04-A-A;13;999999999997;9999999999999;28;Y;NG;\r\nYD18379-04-A-A;13;999999999998;9999999999999;28;Y;NG;\r\nYD18379-04-A-A;13;999999999999;9999999999999;28;Y;NG;\r\nYD18379-04-A-A;13;9999999999994;9999999999996;28;Y;NG;\r\nYD18379-04-A-A;13;9999999999995;9999999999996;28;Y;NG;\r\nYD18379-04-A-A;13;9999999999996;9999999999996;28;Y;NG;\r\nYD18379-04-A-A;13;9999999999997;9999999999999;28;Y;NG;\r\nYD18379-04-A-A;13;9999999999998;9999999999999;28;Y;NG;\r\nYD18379-04-A-A;13;9999999999999;9999999999999;28;Y;NG;"}};
     info.cmd236_flag = false;
-    patchSet(["info","cmd236_flag"], info.cmd236_flag);
     if (res_json.success && res_json.result.result.startsWith("OK")) {
       const lines = res_json.result.result.split("\r\n").slice(1);
-      const info = lines[1].split(";");
+      const info = lines[0].split(";");
       let workorder = workOrder, item = info[0], workStep = info[1], panel_num = lines.length;
-      let sht_no = [], panel_no = [], twodid_step = [], twodid_type = [], twodid_input = [];
+      let sht_no = [], panel_no = [], twodid_step = [], twodid_type = [];
       for (const line of lines) {
         const parts = line.split(";");
         sht_no.push(parts[2]);
         panel_no.push(parts[3]);
         twodid_step.push(parts[4]);
         twodid_type.push(parts[5]);
-        twodid_input.push("N");
       }
-      return { workorder, item, workStep, sht_no, panel_no, twodid_step, twodid_type, twodid_input, panel_num };
+      return { workorder, item, workStep, sht_no, panel_no, twodid_step, twodid_type, panel_num };
     }
 
     res = await fetch(`${OIS_API_BASE}/workorder2`, { method: 'POST', headers, body: JSON.stringify({ emp_no: info.employeeId, workorder: workOrder }) });
     res_json = await res.json();
     info.cmd236_flag = true;
-    patchSet(["info","cmd236_flag"], info.cmd236_flag);
     if (res_json.success && res_json.result.result.startsWith("OK")) {
       const lines = res_json.result.result.split("\r\n").slice(1);
-      const info = lines[1].split(";");
+      const info = lines[0].split(";");
       let workorder = workOrder, item = info[1], workStep = info[2], panel_num = info[8];
-      let sht_no = [], panel_no = [], twodid_step = [], twodid_type = [], twodid_input = [];
+      let sht_no = [], panel_no = [], twodid_step = [], twodid_type = [];
       for (const line of lines) {
         const parts = line.split(";");
         sht_no.push(parts[3]);
         panel_no.push(parts[4]);
         twodid_step.push(parts[5]);
         twodid_type.push(parts[6]);
-        twodid_input.push("N");
       }
-      return { workorder, item, workStep, sht_no, panel_no, twodid_step, twodid_type, twodid_input, panel_num };
+      return { workorder, item, workStep, sht_no, panel_no, twodid_step, twodid_type, panel_num };
     }
 
     await showCustomModal(`工單驗證失敗：${res_json.result?.result || '無有效工單數據'}`);
@@ -623,11 +585,10 @@ async function validate2DID(twodid) {
 
     if (detail === "") {
       await showCustomModal("[validate2DID] 進入 requested_2DID_dict 分支但 detail 為空，可能邏輯被改壞了")
-      detail = "異常錯誤"
+      detail = "異常錯誤";
     }
     else {
       other_2DID_dict[twodid] = { ret_type: "NG", workOrder: twodid_info.workOrder, item: twodid_info.item, detail: (detail === "") ? "異常錯誤" : detail };
-      patchDictSet(["other_2DID_dict"], twodid, { ...other_2DID_dict[twodid] });	
       NGSheetReport(twodid, twodid_info.panel_no, (detail === "") ? "異常錯誤" : detail);
     }
 
@@ -644,7 +605,6 @@ async function validate2DID(twodid) {
       if (workOrder != info.workOrder) detail += "混工單;";
       if (productItem != info.productItem) detail += "混品目;";
       other_2DID_dict[twodid] = { ret_type: "NG", workOrder: workOrder, item: productItem, detail: (detail == "") ? "異常錯誤" : detail };
-      patchDictSet(["other_2DID_dict"], twodid, { ...other_2DID_dict[twodid] });	
 
       if (detail != ""){
         const panels_info = await validateWorkOrder(workOrder);
@@ -654,14 +614,13 @@ async function validate2DID(twodid) {
           await NGSheetReport(twodid, twodid_info.panel_no, detail);
         }
         else {
-          console.error("此製品之工單查無任何資料，因此不上傳資訊")
+          console.error("此製品之工單查無任何資料，因此不上傳資訊");
         }
       }
 
       return { ret_type: "NG", workOrder: workOrder, item: productItem, detail: (detail == "") ? "異常錯誤" : detail };
     }
-    other_2DID_dict[twodid] = { ret_type: "NG", workOrder: "查無工單", item: "查無品目", detail: "異常錯誤" }
-    patchDictSet(["other_2DID_dict"], twodid, { ...other_2DID_dict[twodid] });	
+    other_2DID_dict[twodid] = { ret_type: "NG", workOrder: "查無工單", item: "查無品目", detail: "異常錯誤" };
     return { ret_type: "NG", workOrder: "查無工單", item: "查無品目", detail: "異常錯誤" };
   }
   catch (error) {
@@ -676,7 +635,6 @@ async function validate2DID(twodid) {
 function changeStage(s) {
   stage.value = s;
   sendSocketMessage("STEP_UPDATE", s);
-  patchSet(["stage"], s);
 }
 
 // Reset alls storage data
@@ -695,7 +653,6 @@ function resetAll() {
   Object.assign(forceCommand, { command: false, triggerTime: null });
 
   changeStage("empId");
-  patchResetAll();
 }
 
 // Storage history request and list expected 2DID in target work order
@@ -706,18 +663,16 @@ function create2DIDDict(panelList, initial = true, addExpected = true) {
   const twodid_type_list = panelList.twodid_type;
 
   if (initial){
-    Object.assign(requested_2DID_dict, {}); patchDictClear(["requested_2DID_dict"]);
-    Object.assign(expected_2DID_dict, {}); patchDictClear(["expected_2DID_dict"]);
-    Object.assign(scanned_2DID_dict, {}); patchDictClear(["scanned_2DID_dict"]);
-    Object.assign(other_2DID_dict, {}); patchDictClear(["other_2DID_dict"]);
+    Object.assign(requested_2DID_dict, {});
+    Object.assign(expected_2DID_dict, {});
+    Object.assign(scanned_2DID_dict, {});
+    Object.assign(other_2DID_dict, {});
   }
 
   for (let index = 0; index < panelList.panel_num; index++) {
     requested_2DID_dict[sht_no_list[index]] = { workOrder: panelList.workorder, item: panelList.item, workStep: panelList.workStep, panel_no: panel_no_list[index], twodid_step: twodid_step_list[index], twodid_type: twodid_type_list[index] };
-    patchDictSet(["requested_2DID_dict"], sht_no_list[index], { ...requested_2DID_dict[sht_no_list[index]] });
     if (addExpected){
       expected_2DID_dict[sht_no_list[index]] = { panel_no: panel_no_list[index], twodid_step: twodid_step_list[index], twodid_type: twodid_type_list[index] };
-      patchDictSet(["expected_2DID_dict"], sht_no_list[index], { ...expected_2DID_dict[sht_no_list[index]] });
     }
   }
 }
@@ -736,8 +691,6 @@ const handleInfoInput = async (data) => {
 
     info.employeeId = result.empNo;
     info.employeeName = result.empName;
-    patchSet(["info","employeeId"], info.employeeId);
-    patchSet(["info","employeeName"], info.employeeName);
     changeStage((info.workOrder === "") ? "workOrder" : "twoDID");
   }
 
@@ -749,12 +702,12 @@ const handleInfoInput = async (data) => {
 
     const valid = await validateWorkOrder(value);
     if (valid && valid.workStep !== ""){
-      info.workOrder = valid.workorder; patchSet(["info","workOrder"], info.workOrder);
-      info.productItem = valid.item; patchSet(["info","productItem"], info.productItem);
-      info.workStep = valid.workStep; patchSet(["info","workStep"], info.workStep);
-      info.panel_num = valid.panel_num; patchSet(["info","panel_num"], info.panel_num);
-      info.OK_num = 0; patchSet(["info","OK_num"], info.OK_num);
-      info.NG_num = 0; patchSet(["info","NG_num"], info.NG_num);
+      info.workOrder = valid.workorder;
+      info.productItem = valid.item;
+      info.workStep = valid.workStep;
+      info.panel_num = valid.panel_num;
+      info.OK_num = 0;
+      info.NG_num = 0;
       create2DIDDict(valid);
       changeStage("twoDID");
     }
@@ -786,22 +739,19 @@ const processControl = async (data, source) => {
   // Check platform at loading area
   let targetPlatform = detectTargetPlatform();
   if (targetPlatform == null) return null;
-  const targetPlatformInfo = (PlatformState.up_in == 1) ? "dn_platform_2DID" :  "up_platform_2DID";
 
   // Receive camera timeout signal
   if (value == "TIMEOUT_BLANK") {
     if (source.startsWith("CAMERA_LEFT")) {
-      const lastLeft = side_history_2DID_list.left[0]
+      const lastLeft = side_history_2DID_list.left[0];
       if (!lastLeft || Date.now() - lastLeft.timestamp > 1500) {
         targetPlatform.left = { pdcode: "等待掃描...", ret_type: "", detail: "" };
-        patchSet([targetPlatformInfo, "left"], { ...targetPlatform.left });
       }
     }
     else if (source.startsWith("CAMERA_RIGHT")) {
-      const lastRight = side_history_2DID_list.right[0]
+      const lastRight = side_history_2DID_list.right[0];
       if (!lastRight || Date.now() - lastRight.timestamp > 1500) {
         targetPlatform.right = { pdcode: "等待掃描...", ret_type: "", detail: "" };
-        patchSet([targetPlatformInfo, "right"], { ...targetPlatform.right });
       }
     }
 
@@ -831,39 +781,34 @@ const processControl = async (data, source) => {
   // Filtered short period repeated 2DID for frontend log
   const sheet_history = (source.startsWith("CAMERA_LEFT")) ? side_history_2DID_dict.left[value] : side_history_2DID_dict.right[value];
   if (sheet_history && Date.now() - sheet_history.timestamp > shortPeriodFilterThreshold) {
-    if (source.startsWith("CAMERA_LEFT")) {
-      sheet_history.timestamp = Date.now(); patchDictSet(["side_history_2DID_dict","left"], value, { ...sheet_history });
-    }
-    else if (source.startsWith("CAMERA_RIGHT")) {
-      sheet_history.timestamp = Date.now(); patchDictSet(["side_history_2DID_dict","right"], value, { ...sheet_history });
-    }
+    sheet_history.timestamp = Date.now();
   }
   else {
     if (source.startsWith("CAMERA_LEFT")) { 
-      side_history_2DID_list.left.unshift({ ...rec, pdcode: value }); patchListUnshift(["side_history_2DID_list","left"], { ...rec, pdcode: value }, 500);
-      side_history_2DID_dict.left[value] = { ...rec }; patchDictSet(["side_history_2DID_dict","left"], value, { ...rec });
+      side_history_2DID_list.left.unshift({ ...rec, pdcode: value });
+      side_history_2DID_dict.left[value] = { ...rec };
     }
     else if (source.startsWith("CAMERA_RIGHT")) {
-      side_history_2DID_list.right.unshift({ ...rec, pdcode: value }); patchListUnshift(["side_history_2DID_list","right"], { ...rec, pdcode: value }, 500);
-      side_history_2DID_dict.right[value] = { ...rec }; patchDictSet(["side_history_2DID_dict","right"], value, { ...rec });
+      side_history_2DID_list.right.unshift({ ...rec, pdcode: value });
+      side_history_2DID_dict.right[value] = { ...rec };
     }
   }
 
   // Filtered short period repeated 2DID to record
   if (history_2DID_dict[value]) {
-    history_2DID_dict[value].timestamp = Date.now(); patchDictSet(["history_2DID_dict"], value, { ...history_2DID_dict[value] });
+    history_2DID_dict[value].timestamp = Date.now();
   }
   else {
-    history_2DID_dict[value] = { ...rec }; patchDictSet(["history_2DID_dict"], value, { ...history_2DID_dict[value] });
+    history_2DID_dict[value] = { ...rec };
   }
 
   // Filled the information for frontend
   if (validResult.ret_type == "OK") {
     if (source.startsWith("CAMERA_LEFT")) {
-      targetPlatform.left = { pdcode: value, ret_type: validResult.ret_type, detail: validResult.detail }; patchSet([targetPlatformInfo, "left"], { ...targetPlatform.left });
+      targetPlatform.left = { pdcode: value, ret_type: validResult.ret_type, detail: validResult.detail };
     }
     else if (source.startsWith("CAMERA_RIGHT")) {
-      targetPlatform.right = { pdcode: value, ret_type: validResult.ret_type, detail: validResult.detail }; patchSet([targetPlatformInfo, "right"], { ...targetPlatform.right });
+      targetPlatform.right = { pdcode: value, ret_type: validResult.ret_type, detail: validResult.detail };
     }
   }
 
@@ -893,16 +838,16 @@ function scanedSheetRecord(platform) {
   if (platform.left.ret_type == "OK") {
     const pdcode = platform.left.pdcode;
     if (pdcode != "等待掃描..." && !scanned_2DID_dict[pdcode]){
-      scanned_2DID_dict[pdcode] = {...scanned_2DID_info, timestamp: Date.now()}; patchDictSet(["scanned_2DID_dict"], pdcode, { ...scanned_2DID_dict[pdcode] });
-      info.OK_num += 1; patchSet(["info","OK_num"], info.OK_num);
+      scanned_2DID_dict[pdcode] = {...scanned_2DID_info, timestamp: Date.now()};
+      info.OK_num += 1;
     }
   }
 
   if (platform.right.ret_type == "OK") {
     const pdcode = platform.right.pdcode;
     if (pdcode != "等待掃描..." && !scanned_2DID_dict[pdcode]){
-      scanned_2DID_dict[pdcode] = {...scanned_2DID_info, timestamp: Date.now()}; patchDictSet(["scanned_2DID_dict"], pdcode, { ...scanned_2DID_dict[pdcode] });
-      info.OK_num += 1; patchSet(["info","OK_num"], info.OK_num);
+      scanned_2DID_dict[pdcode] = {...scanned_2DID_info, timestamp: Date.now()};
+      info.OK_num += 1;
     }
   }
 }
@@ -910,9 +855,9 @@ function scanedSheetRecord(platform) {
 const NGSheetReport = async (pdcode, panel_no, status) => {
   try{
     if (expected_2DID_dict[pdcode] && !scanned_2DID_dict[pdcode]) {
-      scanned_2DID_dict[pdcode] = { timestamp: Date.now(), ret_type: "NG", workOrder: info.workOrder, item: info.productItem, detail: status }; patchDictSet(["scanned_2DID_dict"], pdcode, { ...scanned_2DID_dict[pdcode] });
+      scanned_2DID_dict[pdcode] = { timestamp: Date.now(), ret_type: "NG", workOrder: info.workOrder, item: info.productItem, detail: status };
       await UploadSheet(pdcode, panel_no, "NG", status);
-      info.NG_num += 1; patchSet(["info","NG_num"], info.NG_num);
+      info.NG_num += 1;
     }
     else if (!other_2DID_dict[pdcode]){
       await UploadSheet(pdcode, panel_no, "NG", status);
@@ -927,19 +872,12 @@ const NGSheetReport = async (pdcode, panel_no, status) => {
 const UploadSheet = async (pdcode, panel_no, ret_type, status) => {
   const payload = { emp_no: info.employeeId, workOrder: info.workOrder, partno: info.productItem, work_step: info.workStep, sht_no: pdcode, panel_no: panel_no, twodid_type: ret_type, remark: status };
   await Ajax(`${OIS_API_BASE}/write2did`, { method: "POST", headers, body: JSON.stringify(payload) }, 1500);
-  // await fetch(`${OIS_API_BASE}/write2did`, { method: "POST", headers, body: JSON.stringify(payload) });
-  // try {
-  //   await fetch(`${OIS_API_BASE}/write2did`, { method: "POST", headers, body: JSON.stringify(payload) });
-  // }
-  // catch (error) {
-  //   console.error("寫入 NG 狀態失敗:", error);
-  // }
 }
 
 // --- Button Control --- //
 function employeeClear() {
-  info.employeeId = ""; patchSet(["info","employeeId"], info.employeeId);
-  info.employeeName = ""; patchSet(["info","employeeName"], info.employeeName);
+  info.employeeId = "";
+  info.employeeName = "";
   changeStage("empId");
 }
 
@@ -952,11 +890,12 @@ async function forceExecute() {
 
   if (info.OK_num == info.panel_num || ((info.OK_num == info.panel_num - 1) && targetPlatform.left.ret_type === "OK" && targetPlatform.right.ret_type === "OK")) {
     await showCustomModal("作業後將達 PANEL 數上限，因此無法繼續執行。");
+    return;
   }
 
   if (targetPlatform.left.ret_type === "OK" || targetPlatform.right.ret_type === "OK") {
-    forceCommand.command = true; patchSet(["forceCommand","command"], forceCommand.command);
-    forceCommand.triggerTime = Date.now(); patchSet(["forceCommand","triggerTime"], forceCommand.triggerTime);
+    forceCommand.command = true;
+    forceCommand.triggerTime = Date.now();
     sendSocketMessage("GO_NOGO", 1);
     return;
   }
@@ -973,6 +912,7 @@ const completeAllScanned = async () => {
   if (info.cmd236_flag == false){
     try {
       console.log("fill other products NG");
+
       for (const [key, value] of Object.entries(expected_2DID_dict)) {
         if (!scanned_2DID_dict[key]) {
           await UploadSheet(key, value.panel_no, "NG", "未投入，作業結束");

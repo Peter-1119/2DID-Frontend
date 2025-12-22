@@ -149,7 +149,8 @@ import { ref, onMounted, onUnmounted, computed, nextTick, watch, reactive } from
 import logo from "@/components/icons/flexium_logo.png"
 
 const API_URL = "http://10.1.5.122/gxfirstOIS/gxfirstOIS.asmx/GetOISData";
-const OIS_API_BASE = "http://10.1.5.124:2151/api";
+// const OIS_API_BASE = "http://10.1.5.124:2151/api";
+const OIS_API_BASE = "http://10.8.32.64:2151/api";
 const wsUrl = 'ws://127.0.0.1:8181'
 const headers = { 'Content-Type': 'application/json' };
 
@@ -277,10 +278,16 @@ const get2DIDStatusShow = (status) => {
 };
 
 // --- Websocket Process --- ///
+let reconnectDelay = 3000; // <--- 補上這行
+let reconnectTimer = null; // <--- 補上這行
 let socket = null;
 function connectWebSocket() {
-  socket = new WebSocket(wsUrl);
+  if (socket) {
+    // 避免重複建立
+    return;
+  }
   
+  socket = new WebSocket(wsUrl);
   const timeoutMs = 1000;
   const timer = setTimeout(() => {
     if (socket && socket.readyState === WebSocket.CONNECTING) socket.close(4000, "connect timeout");
@@ -289,10 +296,10 @@ function connectWebSocket() {
   
   socket.onopen = () => { 
     console.log("WS Connected");
+    reconnectDelay = 3000; // ✅ 連線成功，重置等待時間
     clearTimeout(timer);
-    startHeartbeat(); // ✅ 開始送 heartbeat
-    restoreState();
-  }
+    startHeartbeat();
+  };
 
   socket.onmessage = (event) => {
     try {
@@ -326,38 +333,6 @@ function connectWebSocket() {
         // console.log("[HB] ack", message.payload);
         return;
       }
-      else if (message.type === "control" && message.command === "STATE_SYNC") {
-        const s = message.payload || {}
-
-        // 注意：要用 Object.assign 保持 reactive
-        if (s.info) Object.assign(info, s.info)
-        if (s.stage) stage.value = s.stage
-        if (s.plc) Object.assign(PlatformState, {
-          up_in: s.plc.up_in ?? -1,
-          dn_in: s.plc.dn_in ?? -1,
-          start_message: s.plc.start_message ?? -1
-        })
-
-        // dict
-        if (s.requested_2DID_dict) Object.assign(requested_2DID_dict, s.requested_2DID_dict)
-        if (s.expected_2DID_dict) Object.assign(expected_2DID_dict, s.expected_2DID_dict)
-        if (s.scanned_2DID_dict) Object.assign(scanned_2DID_dict, s.scanned_2DID_dict)
-        if (s.other_2DID_dict) Object.assign(other_2DID_dict, s.other_2DID_dict)
-        if (s.history_2DID_dict) Object.assign(history_2DID_dict, s.history_2DID_dict)
-
-        // platform display
-        if (s.up_platform_2DID) Object.assign(up_platform_2DID, s.up_platform_2DID)
-        if (s.dn_platform_2DID) Object.assign(dn_platform_2DID, s.dn_platform_2DID)
-
-        // list
-        if (s.side_history_2DID_list) Object.assign(side_history_2DID_list, s.side_history_2DID_list)
-
-        // force
-        if (s.forceCommand) Object.assign(forceCommand, s.forceCommand)
-
-        console.log("[STATE] restored")
-        return
-      }
     }
     catch (error) {
       console.error("WebSocket 解析訊息失敗: ", error);
@@ -365,15 +340,24 @@ function connectWebSocket() {
   }
 
   socket.onclose = () => {
-    console.log("WebSocket: 連接已關閉，3秒後嘗試重連...");
-    stopHeartbeat(); // ✅ 關閉 heartbeat
+    console.log(`WebSocket: 連接已關閉，${reconnectDelay/1000}秒後嘗試重連...`);
+    stopHeartbeat();
     socket = null;
 
+    // 清空狀態
     PlatformState.up_in = -1;
     PlatformState.dn_in = -1;
     PlatformState.start_message = -1;
-    setTimeout(connectWebSocket, 3000);
-  }
+
+    // ✅ 指數退避：每次失敗等待時間加倍，上限 30秒
+    // 這樣可以避免短時間內產生大量 CLOSE_WAIT
+    if (reconnectTimer) clearTimeout(reconnectTimer);
+    reconnectTimer = setTimeout(() => {
+        connectWebSocket();
+    }, reconnectDelay);
+    
+    reconnectDelay = Math.min(reconnectDelay * 1.5, 30000); 
+  };
 
   socket.onerror = (error) => {
     console.error("WebSocket 發生錯誤: ", error);
@@ -465,7 +449,8 @@ async function validateEmpId(empId) {
     const requestData = new URLSearchParams()
     requestData.append("CmdCode","5")
     requestData.append("InMessage_Json", JSON.stringify({ Emp_NO: empId }))
-    const response = await fetch(API_URL,{ method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: requestData.toString()});
+    // const response = await fetch(API_URL,{ method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: requestData.toString()});
+    const response = await Ajax(API_URL, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: requestData.toString() }, 1500);
     const responseText = await response.text();
     const json = JSON.parse(responseText);
     if (json.code === 200 && json.data) {
@@ -483,63 +468,30 @@ async function validateEmpId(empId) {
 }
 
 async function validateWorkOrder(workOrder) {
-  let res, res_json;
   try {
-    // res = await fetch(`${OIS_API_BASE}/Read_2DID`, { method: "POST", headers, body: JSON.stringify({ emp_no: info.employeeId, workorder: workOrder }) });
-    // res_json = await res.json();
-    // if (res_json.success && res_json.data) {
-    //   const pdcodedata = res_json.pdcode_data;
-    //   info.cmd236_flag = pdcodedata.cmd236_Flag;
-    //   return {
-    //     workorder: pdcodedata.workOrder,
-    //     item: pdcodedata.item,
-    //     workStep: pdcodedata.work_step,
-    //     sht_no: pdcodedata.sht_no,
-    //     panel_no: pdcodedata.panel_no,
-    //     twodid_step: pdcodedata.twodid_step,
-    //     twodid_type: pdcodedata.twodid_type,
-    //     panel_num: pdcodedata.panel_num
-    //   }
-    // }
+    // 呼叫你的 C++ 後端 API
+    // 注意：後端 API 2 已經整合了 235/236 的邏輯，這裡只需要呼叫一次
+    const res = await fetch(`${OIS_API_BASE}/workorder`, { method: 'POST', headers, body: JSON.stringify({ emp_no: info.employeeId, workorder: workOrder, insert_to_database: true }) });
+    const res_json = await res.json();
 
-    // res = await fetch(`${OIS_API_BASE}/workorder`, { method: 'POST', headers, body: JSON.stringify({ emp_no: info.employeeId, workorder: workOrder }) });
-    // res_json = await res.json();
-    res_json = {success: 200, result: {result: "OK;\r\nYD18379-04-A-A;13;4240912012548;4240912012548;28;N;OK;\r\nYD18379-04-A-A;13;4240912013144;4240912013144;28;N;OK;\r\nYD18379-04-A-A;13;4240913025717;4240913025717;28;Y;NG;\r\nYD18379-04-A-A;13;4240913025833;4240913025833;28;Y;NG;\r\nYD18379-04-A-A;13;4240913025834;4240913025834;28;Y;NG;\r\nYD18379-04-A-A;13;4240914000471;4240914000471;28;N;OK;\r\nYD18379-04-A-A;13;4240914001156;4240914001156;28;N;OK;\r\nYD18379-04-A-A;13;4240914016025;4240914016025;29;N;OK;\r\nYD18379-04-A-A;13;999999999997;999999999999;28;N;OK;\r\nYD18379-04-A-A;13;999999999997;9999999999999;28;Y;NG;\r\nYD18379-04-A-A;13;999999999998;9999999999999;28;Y;NG;\r\nYD18379-04-A-A;13;999999999999;9999999999999;28;Y;NG;\r\nYD18379-04-A-A;13;9999999999994;9999999999996;28;Y;NG;\r\nYD18379-04-A-A;13;9999999999995;9999999999996;28;Y;NG;\r\nYD18379-04-A-A;13;9999999999996;9999999999996;28;Y;NG;\r\nYD18379-04-A-A;13;9999999999997;9999999999999;28;Y;NG;\r\nYD18379-04-A-A;13;9999999999998;9999999999999;28;Y;NG;\r\nYD18379-04-A-A;13;9999999999999;9999999999999;28;Y;NG;"}};
-    info.cmd236_flag = false;
-    if (res_json.success && res_json.result.result.startsWith("OK")) {
-      const lines = res_json.result.result.split("\r\n").slice(1);
-      const info = lines[0].split(";");
-      let workorder = workOrder, item = info[0], workStep = info[1], panel_num = lines.length;
-      let sht_no = [], panel_no = [], twodid_step = [], twodid_type = [];
-      for (const line of lines) {
-        const parts = line.split(";");
-        sht_no.push(parts[2]);
-        panel_no.push(parts[3]);
-        twodid_step.push(parts[4]);
-        twodid_type.push(parts[5]);
-      }
-      return { workorder, item, workStep, sht_no, panel_no, twodid_step, twodid_type, panel_num };
+    if (res_json.success && res_json.data) {
+      const d = res_json.data;
+      info.cmd236_flag = (res_json.source === "API236");
+
+      // 直接回傳後端整理好的資料結構 (已移除 twodid_input)
+      return {
+        workorder: d.workorder,
+        item: d.item,
+        workStep: d.workStep,
+        panel_num: d.panel_num,
+        sht_no: d.sht_no,      // Array
+        panel_no: d.panel_no,  // Array
+        twodid_step: d.twodid_step, // Array
+        twodid_type: d.twodid_type  // Array
+      };
     }
 
-    res = await fetch(`${OIS_API_BASE}/workorder2`, { method: 'POST', headers, body: JSON.stringify({ emp_no: info.employeeId, workorder: workOrder }) });
-    res_json = await res.json();
-    info.cmd236_flag = true;
-    if (res_json.success && res_json.result.result.startsWith("OK")) {
-      const lines = res_json.result.result.split("\r\n").slice(1);
-      const info = lines[0].split(";");
-      let workorder = workOrder, item = info[1], workStep = info[2], panel_num = info[8];
-      let sht_no = [], panel_no = [], twodid_step = [], twodid_type = [];
-      for (const line of lines) {
-        const parts = line.split(";");
-        sht_no.push(parts[3]);
-        panel_no.push(parts[4]);
-        twodid_step.push(parts[5]);
-        twodid_type.push(parts[6]);
-      }
-      return { workorder, item, workStep, sht_no, panel_no, twodid_step, twodid_type, panel_num };
-    }
-
-    await showCustomModal(`工單驗證失敗：${res_json.result?.result || '無有效工單數據'}`);
+    await showCustomModal(`工單驗證失敗：${res_json.message || '查無資料'}`);
     return null;
   }
   catch (error) {
@@ -684,8 +636,8 @@ const handleInfoInput = async (data) => {
   if (!value) return;
 
   if (stage.value === "empId") {
-    const result = await validateEmpId(value);
-    // const result = {empNo: "12868", empName: "王巨成"};
+    // const result = await validateEmpId(value);
+    const result = {empNo: "12868", empName: "王巨成"};
 
     if (!result) return;
 
@@ -870,7 +822,7 @@ const NGSheetReport = async (pdcode, panel_no, status) => {
 }
 
 const UploadSheet = async (pdcode, panel_no, ret_type, status) => {
-  const payload = { emp_no: info.employeeId, workOrder: info.workOrder, partno: info.productItem, work_step: info.workStep, sht_no: pdcode, panel_no: panel_no, twodid_type: ret_type, remark: status };
+  const payload = { emp_no: info.employeeId, workOrder: info.workOrder, item: info.productItem, workStep: info.workStep, sht_no: pdcode, panel_no: panel_no, twodid_type: ret_type, remark: status };
   await Ajax(`${OIS_API_BASE}/write2did`, { method: "POST", headers, body: JSON.stringify(payload) }, 1500);
 }
 
@@ -933,13 +885,13 @@ const completeAllScanned = async () => {
 }
 
 // --- Window Control Function --- //
-function restoreState() {
-  sendSocketMessage("LOAD_STATE", { page: "scan-ui" })
-}
+// function restoreState() {
+//   sendSocketMessage("LOAD_STATE", { page: "scan-ui" })
+// }
 
-window.addEventListener("beforeunload", () => {
-  sendSocketMessage("SAVE_STATE", { page: "scan-ui" })
-})
+// window.addEventListener("beforeunload", () => {
+//   sendSocketMessage("SAVE_STATE", { page: "scan-ui" })
+// })
 
 onMounted(() => { 
   connectWebSocket();

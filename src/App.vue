@@ -145,11 +145,11 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, computed, nextTick, watch, reactive } from 'vue';
+import { ref, onMounted, onUnmounted, computed, watch, reactive } from 'vue';
 import logo from "@/components/icons/flexium_logo.png"
 
 const API_URL = "http://10.1.5.122/gxfirstOIS/gxfirstOIS.asmx/GetOISData";
-// const OIS_API_BASE = "http://10.1.5.124:2151/api";
+// const OIS_API_BASE = "http://127.0.0.1:2151/api";
 const OIS_API_BASE = "http://10.8.32.64:2151/api";
 const wsUrl = 'ws://127.0.0.1:8181'
 const headers = { 'Content-Type': 'application/json' };
@@ -322,10 +322,11 @@ function connectWebSocket() {
         }
         // Process camera input
         else if (message.source.includes("CAMERA")) {
+          console.log("Receive Camera data payload.")
           processControl(message.payload, message.source);
         }
         else {
-          console.log("WebSocket receive message: ", message);
+          // console.log("WebSocket receive message: ", message);
         }
       }
       else if (message.type === "control" && message.command === "HEARTBEAT_ACK") {
@@ -393,9 +394,7 @@ function stopHeartbeat() {
 // ---- wrappers ----
 const Ajax = async (url, options, time) => {
   const controller = new AbortController();
-  setTimeout(() => {
-    controller.abort();
-  }, time);
+  setTimeout(() => { controller.abort(); }, time);
   let config = { ...options, signal: controller.signal };
 
   let response = await fetch(url, config);
@@ -414,9 +413,7 @@ const showCustomModal = (message, type = 'alert') => {
   modalType.value = type;
   customModal.value.showModal();
 
-  return new Promise((resolve) => {
-    resolveModalPromise = resolve;
-  });
+  return new Promise((resolve) => { resolveModalPromise = resolve; });
 };
 
 const closeModal = () => {
@@ -449,7 +446,6 @@ async function validateEmpId(empId) {
     const requestData = new URLSearchParams()
     requestData.append("CmdCode","5")
     requestData.append("InMessage_Json", JSON.stringify({ Emp_NO: empId }))
-    // const response = await fetch(API_URL,{ method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: requestData.toString()});
     const response = await Ajax(API_URL, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: requestData.toString() }, 1500);
     const responseText = await response.text();
     const json = JSON.parse(responseText);
@@ -469,29 +465,15 @@ async function validateEmpId(empId) {
 
 async function validateWorkOrder(workOrder) {
   try {
-    // 呼叫你的 C++ 後端 API
-    // 注意：後端 API 2 已經整合了 235/236 的邏輯，這裡只需要呼叫一次
-    const res = await fetch(`${OIS_API_BASE}/workorder`, { method: 'POST', headers, body: JSON.stringify({ emp_no: info.employeeId, workorder: workOrder, insert_to_database: true }) });
-    const res_json = await res.json();
+    const res = await Ajax(`${OIS_API_BASE}/workorder`, { method: 'POST', headers, body: JSON.stringify({ emp_no: info.employeeId, workorder: workOrder, insert_to_database: true }) }, 3000);
 
-    if (res_json.success && res_json.data) {
-      const d = res_json.data;
-      info.cmd236_flag = (res_json.source === "API236");
-
-      // 直接回傳後端整理好的資料結構 (已移除 twodid_input)
-      return {
-        workorder: d.workorder,
-        item: d.item,
-        workStep: d.workStep,
-        panel_num: d.panel_num,
-        sht_no: d.sht_no,      // Array
-        panel_no: d.panel_no,  // Array
-        twodid_step: d.twodid_step, // Array
-        twodid_type: d.twodid_type  // Array
-      };
+    if (res.success && res.data) {
+      const d = res.data;
+      info.cmd236_flag = (res.source === "API236");
+      return { workorder: d.workorder, item: d.item, workStep: d.workStep, panel_num: d.panel_num, sht_no: d.sht_no, panel_no: d.panel_no, twodid_step: d.twodid_step, twodid_type: d.twodid_type };
     }
 
-    await showCustomModal(`工單驗證失敗：${res_json.message || '查無資料'}`);
+    await showCustomModal(`工單驗證失敗：${res.message || '查無資料'}`);
     return null;
   }
   catch (error) {
@@ -549,8 +531,7 @@ async function validate2DID(twodid) {
 
   // This 2DID has not detect in the history requested need to get the information from server
   try {
-    const res = await fetch(`${OIS_API_BASE}/twodid`, { method: 'POST', headers, body: JSON.stringify({ emp_no : info.employeeId, twodid }) });
-    const res_json = await res.json();
+    const res_json = await Ajax(`${OIS_API_BASE}/twodid`, { method: 'POST', headers, body: JSON.stringify({ emp_no : info.employeeId, twodid }) }, 2000);
     if (res_json.success) {
       const [_, workOrder, productItem, workStep] = res_json.result.result.split(";");
 
@@ -627,6 +608,8 @@ function create2DIDDict(panelList, initial = true, addExpected = true) {
       expected_2DID_dict[sht_no_list[index]] = { panel_no: panel_no_list[index], twodid_step: twodid_step_list[index], twodid_type: twodid_type_list[index] };
     }
   }
+  console.log("requested_2DID_dict: ", requested_2DID_dict);
+  console.log("expected_2DID_dict: ", expected_2DID_dict);
 }
 
 // Handle employee login and check work order valid
@@ -707,13 +690,14 @@ const processControl = async (data, source) => {
       }
     }
 
+    // Detect force information
     if (forceCommand.command === true && (forceCommand.triggerTime && Date.now() - forceCommand.triggerTime < forceTriggerPeriod) && (targetPlatform.left.ret_type === "OK" || targetPlatform.right.ret_type === "OK")) {
       sendSocketMessage("GO_NOGO", 1);
     }
     else {
       sendSocketMessage("GO_NOGO", 0);
     }
-    return
+    return;
   }
 
   // Check product validate
@@ -725,14 +709,15 @@ const processControl = async (data, source) => {
   if (info.OK_num === info.panel_num || ((info.OK_num == info.panel_num - 1) && two_camera_pass)) {
     if (rec.ret_type == "OK") {
       rec.ret_type = "NG";
-      rec.detail = "超過 PANEL 上限"
+      rec.detail = "超過 PANEL 上限";
     }
     await showCustomModal(`已達 PANEL 數上限，因此無法綁定。`);
   }
 
   // Filtered short period repeated 2DID for frontend log
   const sheet_history = (source.startsWith("CAMERA_LEFT")) ? side_history_2DID_dict.left[value] : side_history_2DID_dict.right[value];
-  if (sheet_history && Date.now() - sheet_history.timestamp > shortPeriodFilterThreshold) {
+  const last_info = (source.startsWith("CAMERA_LEFT")) ? side_history_2DID_list.left[0] : side_history_2DID_list.right[0];
+  if (sheet_history && (last_info && (last_info.pdcode == value)) && (Date.now() - sheet_history.timestamp < shortPeriodFilterThreshold)) {
     sheet_history.timestamp = Date.now();
   }
   else {
@@ -755,13 +740,11 @@ const processControl = async (data, source) => {
   }
 
   // Filled the information for frontend
-  if (validResult.ret_type == "OK") {
-    if (source.startsWith("CAMERA_LEFT")) {
-      targetPlatform.left = { pdcode: value, ret_type: validResult.ret_type, detail: validResult.detail };
-    }
-    else if (source.startsWith("CAMERA_RIGHT")) {
-      targetPlatform.right = { pdcode: value, ret_type: validResult.ret_type, detail: validResult.detail };
-    }
+  if (source.startsWith("CAMERA_LEFT")) {
+    targetPlatform.left = { pdcode: value, ret_type: validResult.ret_type, detail: validResult.detail };
+  }
+  else if (source.startsWith("CAMERA_RIGHT")) {
+    targetPlatform.right = { pdcode: value, ret_type: validResult.ret_type, detail: validResult.detail };
   }
 
   // Send M86, M87 command to PLC
@@ -856,7 +839,7 @@ async function forceExecute() {
 }
 
 const completeAllScanned = async () => {
-  if (PlatformState.dn_in == 1 || PlatformState.up_in == 1 || (up_platform_2DID.left?.ret_type != "" || up_platform_2DID.right?.ret_type != "" || dn_platform_2DID.left.ret_type != "" || dn_platform_2DID.right.ret_type != "")) {
+  if ((up_platform_2DID.left?.ret_type != "" || up_platform_2DID.right?.ret_type != "" || dn_platform_2DID.left.ret_type != "" || dn_platform_2DID.right.ret_type != "")) {
     await showCustomModal("請保持平台無任何製品");
     return;
   }
@@ -865,13 +848,15 @@ const completeAllScanned = async () => {
     try {
       console.log("fill other products NG");
 
-      for (const [key, value] of Object.entries(expected_2DID_dict)) {
-        if (!scanned_2DID_dict[key]) {
-          await UploadSheet(key, value.panel_no, "NG", "未投入，作業結束");
+      let notScanned_2DID_list = [];
+      for (const [pdcode, sinfo] of Object.entries(expected_2DID_dict)) {
+        if (!scanned_2DID_dict[pdcode]) {
+          notScanned_2DID_list.push({ emp_no: info.employeeId, workOrder: info.workOrder, workStep: info.workStep, item: info.productItem, sht_no: pdcode, panel_no: sinfo.panel_no, twodid_type: "NG", remark: "未投入，作業結束" })
         }
       }
-      console.log("request API");
-      await fetch(`${OIS_API_BASE}/Delete_2DID`, { method: "POST", headers, body: JSON.stringify({ workorder: info.workOrder }) });
+      
+      await Ajax(`${OIS_API_BASE}/write2dids`, { method: "POST", headers, body: JSON.stringify(notScanned_2DID_list) }, 3000);
+      await Ajax(`${OIS_API_BASE}/Delete_2DID`, { method: "POST", headers, body: JSON.stringify({ workorder: info.workOrder }) }, 1500);
     }
     catch (error) {
       console.error("清除 2DID 資料失敗");
@@ -885,17 +870,7 @@ const completeAllScanned = async () => {
 }
 
 // --- Window Control Function --- //
-// function restoreState() {
-//   sendSocketMessage("LOAD_STATE", { page: "scan-ui" })
-// }
-
-// window.addEventListener("beforeunload", () => {
-//   sendSocketMessage("SAVE_STATE", { page: "scan-ui" })
-// })
-
-onMounted(() => { 
-  connectWebSocket();
-})
+onMounted(() => { connectWebSocket(); })
 onUnmounted(() => { 
   stopHeartbeat();
   if (socket) socket.close();

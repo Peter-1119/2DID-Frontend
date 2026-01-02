@@ -159,14 +159,11 @@ import { ref, onMounted, onUnmounted, computed, watch, reactive } from 'vue';
 import { i18nDict } from "@/textManager/translate"
 import logo from "@/components/icons/flexium_logo.png"
 
-const API_URL = "http://10.1.5.122/gxfirstOIS/gxfirstOIS.asmx/GetOISData";
-// const OIS_API_BASE = "http://127.0.0.1:2151";
 const OIS_API_BASE = "http://10.8.32.64:2151";
 const wsUrl = 'ws://127.0.0.1:8181'
 const headers = { 'Content-Type': 'application/json' };
 
 const currentLang = ref('zh'); 
-
 const t = (key) => {
   if (!key) return key;
   if (currentLang.value === 'zh') return key;
@@ -310,7 +307,6 @@ function sendSocketMessage(command, payload) {
 // ---- wrappers ----
 const Ajax = async (url, options, time) => {
   isLoading.value = true;
-  console.log("isBackendOnline.value: ", isBackendOnline.value);
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => { controller.abort(); }, (isBackendOnline.value) ? time : 100);
@@ -435,16 +431,9 @@ const showCustomModal = (message) => {
 // --- API Request --- //
 async function validateEmpId(empId) {
   try {
-    const requestData = new URLSearchParams()
-    requestData.append("CmdCode","5")
-    requestData.append("InMessage_Json", JSON.stringify({ Emp_NO: empId }))
-    const response = await Ajax(API_URL, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: requestData.toString() }, 1500);
-    const responseText = await response.text();
-    const json = JSON.parse(responseText);
-    if (json.code === 200 && json.data) {
-      const {empNo, empName} = json.data;
-      return {empNo, empName};
-    } else {
+    const response = await Ajax(`${OIS_API_BASE}/api/validate_emp`, { method: "POST", headers, body: JSON.stringify({ empId }) }, 1500);
+    if (response.code === 200 && response.data) return { ...response.data };
+    else {
       showCustomModal(t('工號驗證失敗'));
       return false;
     }
@@ -489,6 +478,7 @@ async function validate2DID(twodid) {
       return { ret_type: "NG", workOrder: info.workOrder, item: info.productItem, detail: "跳站" };
     }
     else if (sheet_info.twodid_step === info.workStep) {
+      await sheetReport(twodid, sheet_info.panel_no, "NG", "重工", false);
       return { ret_type: "NG", workOrder: info.workOrder, item: info.productItem, detail: "重工" };
     }
 
@@ -587,8 +577,7 @@ const handleInfoInput = async (data) => {
   if (!value) return;
 
   if (stage.value === "empId") {
-    // const result = await validateEmpId(value);
-    const result = {empNo: "12868", empName: "王巨成"};
+    const result = await validateEmpId(value);
 
     if (!result) return;
 
@@ -745,14 +734,16 @@ async function lastOKUploadSheetDetect(info) {
   Object.assign(targetPlatformUpload2DID, {left: {pdcode: "", detect: false}, right: {pdcode: "", detect: false}});
 }
 
-const sheetReport = async(pdcode, panel_no, type, detail) => {
+const sheetReport = async(pdcode, panel_no, type, detail, report = true) => {
   if (pdcode && (pdcode.length == 0)) return;
 
   if (expected_2DID_dict[pdcode] && !scanned_2DID_dict[pdcode]) {
     scanned_2DID_dict[pdcode] = { timestamp: Date.now(), ret_type: type, workOrder: info.workOrder, item: info.productItem, detail };
 
-    try { await UploadSheet(pdcode, panel_no, type, detail); } 
-    catch (error) { showCustomModal(t(`製品 ${type} 狀態上傳失敗，請確認網路連線！`)); }
+    if (report){
+      try { await UploadSheet(pdcode, panel_no, type, detail); } 
+      catch (error) { showCustomModal(t(`製品 ${type} 狀態上傳失敗，請確認網路連線！`)); }
+    }
 
     if (type == "OK") info.OK_num += 1;
     else if (type == "NG") info.NG_num += 1;

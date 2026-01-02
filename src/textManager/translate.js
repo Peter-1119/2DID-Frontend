@@ -63,5 +63,6 @@ export const i18nDict = {
     "混工單": { vn: "Lẫn công đơn" },
     "混品目": { vn: "Lẫn mục hàng" },
     "進出料製品 2DID 不同，請確認機台是否操作正常": {vn: "Nhập xuất liệu sản phẩm 2DID không giống nhau, hãy kiểm tra máy có làm đúng hay không"},
-    "與後台連線中斷，已切換至本地儲存模式": {vn: "Mất kết nối với máy chủ, đã chuyển sang chế độ lưu trữ cục bộ."}
+    "與後台連線中斷，已切換至本地儲存模式": {vn: "Mất kết nối với máy chủ, đã chuyển sang chế độ lưu trữ cục bộ."},
+    "系統處理中...": {vn: "Xử lý hệ thống"}
 }

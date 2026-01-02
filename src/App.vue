@@ -723,12 +723,12 @@ async function lastOKUploadSheetDetect(info) {
   if (history_2DID_dict[targetPlatformUpload2DID.left.pdcode]) {
     const pdcodeInfo = expected_2DID_dict[targetPlatformUpload2DID.left.pdcode];
     history_2DID_dict[targetPlatformUpload2DID.left.pdcode].timestamp = Date.now();
-    sheetReport(targetPlatformUpload2DID.left.pdcode, pdcodeInfo.panel_no, "OK", "");
+    sheetReport(targetPlatformUpload2DID.left.pdcode, pdcodeInfo.panel_no, "OK", "OK");
   }
   if (history_2DID_dict[targetPlatformUpload2DID.right.pdcode]) {
     const pdcodeInfo = expected_2DID_dict[targetPlatformUpload2DID.right.pdcode];
     history_2DID_dict[targetPlatformUpload2DID.right.pdcode].timestamp = Date.now();
-    sheetReport(targetPlatformUpload2DID.right.pdcode, pdcodeInfo.panel_no, "OK", "");
+    sheetReport(targetPlatformUpload2DID.right.pdcode, pdcodeInfo.panel_no, "OK", "OK");
   }
   
   Object.assign(targetPlatformUpload2DID, {left: {pdcode: "", detect: false}, right: {pdcode: "", detect: false}});
@@ -755,7 +755,7 @@ const sheetReport = async(pdcode, panel_no, type, detail, report = true) => {
 }
 
 const UploadSheet = async (pdcode, panel_no, ret_type, status) => {
-  const payload = { emp_no: info.employeeId, workOrder: info.workOrder, item: info.productItem, workStep: info.workStep, sht_no: pdcode, panel_no: panel_no, twodid_type: ret_type, remark: status };
+  const payload = { emp_no: info.employeeId, workOrder: info.workOrder, item: info.productItem, workStep: info.workStep, sht_no: pdcode, panel_no: panel_no, twodid_type: ret_type, remark: `${status}-IPC` };
   await Ajax(`${OIS_API_BASE}/api/write2did`, { method: "POST", headers, body: JSON.stringify(payload) }, 200);
 }
 
@@ -796,7 +796,7 @@ const completeAllScanned = async () => {
 
   if (info.cmd236_flag == false){
     try {
-      const base = { emp_no: info.employeeId, workOrder: info.workOrder, workStep: info.workStep, item: info.productItem, twodid_type: "NG", remark: "未投入，作業結束" }
+      const base = { emp_no: info.employeeId, workOrder: info.workOrder, workStep: info.workStep, item: info.productItem, twodid_type: "NG", remark: "未投入，作業結束-IPC" }
       let notScanned_2DID_list = Object.entries(expected_2DID_dict).filter(([pdcode]) => !scanned_2DID_dict?.[pdcode]).map(([pdcode, sinfo]) => ({ ...base, sht_no: pdcode, panel_no: sinfo.panel_no}));
       
       await Ajax(`${OIS_API_BASE}/api/write2dids`, { method: "POST", headers, body: JSON.stringify(notScanned_2DID_list) }, 3000);

@@ -34,7 +34,6 @@
           <span class="info-label">{{ t('投入張數') }}：</span><span class="info-value">{{ info.OK_num || 0 }}</span>
            <span class="info-label" style="color: #ff1b78; margin-left: 10px;">NG：</span><span class="info-value" style="color: #ff1b78;">{{ info.NG_num }}</span>
         </div>
-        <!-- <button class="btn btn-toggle" @click="handleToggle">{{ t('切換模式') }}</button> -->
       </div>
 
       <main class="camera-section-main adaptive-view">
@@ -96,6 +95,9 @@
                     </div>
                     <div v-if="item.ret_type === 'NG'" class="list-item-ng-details">
                       <span :title="item.detail">{{ t('原因') }}: {{ t(item.detail) }}</span>
+                      <span v-if="item.workStepName" :title="item.workOrder">{{ item.workOrder }}</span>
+                      <span v-if="item.workStepName" :title="item.item">{{ item.item }}</span>
+                      <span v-if="item.workStepName" :title="item.workStepName">{{ item.workStepName }}</span>
                     </div>
                   </div>
                 </div>
@@ -111,6 +113,9 @@
                     </div>
                     <div v-if="item.ret_type === 'NG'" class="list-item-ng-details">
                       <span :title="item.detail">{{ t('原因') }}: {{ t(item.detail) }}</span>
+                      <span v-if="item.workStepName" :title="item.workOrder">{{ item.workOrder }}</span>
+                      <span v-if="item.workStepName" :title="item.item">{{ item.item }}</span>
+                      <span v-if="item.workStepName" :title="item.workStepName">{{ item.workStepName }}</span>
                     </div>
                   </div>
                 </div>
@@ -123,7 +128,7 @@
       </main>
       <footer class="panel-footer">
         <button class="btn btn-resetuser" @click.stop="employeeClear">{{ t('換人生產') }}</button>
-        <button class="btn btn-reset" @click.stop="resetAll">{{ t('重整') }} (Reset)</button>
+        <!-- <button class="btn btn-reset" @click.stop="resetAll">{{ t('重整') }} (Reset)</button> -->
         <button class="btn btn-execute" @click.stop="forceExecute">{{ t('強制執行') }}</button>
         <button class="btn btn-complete" @click.stop="completeAllScanned">{{ t('完成') }} (Complete)</button>
       </footer>
@@ -142,6 +147,13 @@
       </div>
     </div>
   </dialog>
+
+  <div v-if="isLoading" class="loading-overlay">
+    <div class="loading-content">
+      <div class="spinner"></div>
+      <p>{{ t(loadingMessage) }}</p>
+    </div>
+  </div>
 </template>
 
 <script setup>
@@ -162,6 +174,10 @@ const t = (key) => {
   if (currentLang.value === 'zh') return key;
   return i18nDict[key]?.vn || key;
 };
+
+// --- Loading State ---
+const isLoading = ref(false);
+const loadingMessage = ref("系統處理中..."); // 可動態改變文字
 
 // Process stage
 const stage = ref("empId");
@@ -186,7 +202,6 @@ let info = reactive({
   cmd236_flag: false,
 })
 const emptySlot = () => ({ pdcode: "", ret_type: "", detail: "" });
-let requested_2DID_dict = reactive({});  // Storage all request 2DID dict for other NG sheet to find panel_no which can post API /write_2did; CMD=238 can not response panel_no
 let expected_2DID_dict = reactive({});  // Expected 2DID dict to scaned on this workorder
 let scanned_2DID_dict = reactive({});  // Scanned 2DID dict on this workorder
 let other_2DID_dict = reactive({});  // Reported error 2DID dict
@@ -200,80 +215,45 @@ let last_OK_upload_2DID = reactive({up: {left: {pdcode: "", detect: false}, righ
 // --- Offline & Failover State --- //
 const isBackendOnline = ref(true);
 let backendHeartbeatTimer = null;
-
-// [修改 1] 移除 localStorage，初始化為空陣列，等待 WebSocket 載入
 const offlineRequestQueue = reactive([]);
 
 // Display state
 const isBaseInfoFilled = computed(() => !!(info.employeeId && info.workOrder && info.employeeName && info.productItem));
 const formatTime = (ms) => new Date(ms).toLocaleTimeString();
-const _in_platform = computed(() => {
-  if (PlatformState.up_in == 1) return "上台面";
-  else return "下台面";
-})
-const _out_platform = computed(() => {
-  if (_in_platform.value === "上台面") return "下台面";
-  else return "上台面";
-})
+const _in_platform = computed(() => { return (PlatformState.up_in == 1) ? "上台面" : "下台面"; })
+const _out_platform = computed(() => { return (_in_platform.value === "上台面") ? "下台面" : "上台面"; })
 const getPlatformClass = (text) => {
     if (text === "上台面") return "platform-upper";
     if (text === "下台面") return "platform-lower";
     return "";
 };
-const inProcessPlatform = computed(() => {
-  if (PlatformState.up_in == 1) {
-    return up_platform_2DID;
-  }
-  else {
-    return dn_platform_2DID;
-  }
-})
-const onloadingPlatform = computed(() => {
-  if (PlatformState.up_in != 1) {
-    return up_platform_2DID;
-  }
-  else {
-    return dn_platform_2DID;
-  }
-})
-const get2DIDActionType = (pdcode) => {
-  if (scanned_2DID_dict[pdcode] && scanned_2DID_dict[pdcode].ret_type == "OK") return "出";
-  return "進";
-};
+const inProcessPlatform = computed(() => { return (PlatformState.up_in == 1) ? up_platform_2DID : dn_platform_2DID; })
+const onloadingPlatform = computed(() => { return (PlatformState.up_in != 1) ? up_platform_2DID : dn_platform_2DID; })
+const get2DIDActionType = (pdcode) => (scanned_2DID_dict[pdcode] && scanned_2DID_dict[pdcode].ret_type == "OK") ? "出" : "進";
 const getAreaStatus = (area) => {
   const rt = area?.ret_type || "";
   if (rt === "OK") return "success";
   if (rt === "NG") return "error";
   return "waiting";
 };
-const get2DIDStatusShow = (status) => {
-  if (status && status.length > 0) 
-    return true;
-  return false;
-};
+const get2DIDStatusShow = (status) => { return (status && status.length > 0) ? true : false; };
 
 // --- Websocket Process --- ///
-let reconnectDelay = 3000; // <--- 補上這行
+let reconnectDelay = 5000; // <--- 補上這行
 let reconnectTimer = null; // <--- 補上這行
 let socket = null;
 function connectWebSocket() {
-  if (socket) {
-    // 避免重複建立
-    return;
-  }
+  if (socket) { return; }
   
   socket = new WebSocket(wsUrl);
   const timeoutMs = 1000;
   const timer = setTimeout(() => {
     if (socket && socket.readyState === WebSocket.CONNECTING) socket.close(4000, "connect timeout");
   }, timeoutMs);
-
   
   socket.onopen = () => { 
     console.log("WS Connected");
-    reconnectDelay = 3000; // ✅ 連線成功，重置等待時間
     clearTimeout(timer);
-    startHeartbeat();
     sendSocketMessage("LOAD_OFFLINE_CACHE", {});  // backend communicaiton successful then get local storage API
   };
 
@@ -288,45 +268,25 @@ function connectWebSocket() {
           PlatformState.dn_in = p.dn_in;
           PlatformState.start_message = p.start_message;
         }
-        // Process information display
-        else if (message.source === "info") {
-          console.log("WebSocket Info: ", message.message);
-        }
         // Process infomation input from keyboard
-        else if (message.source === "SCANNER") {
-          handleInfoInput(message.payload);
-        }
+        else if (message.source === "SCANNER") { handleInfoInput(message.payload); }
         // Process camera input
-        else if (message.source.includes("CAMERA")) {
-          console.log("Receive Camera data payload.")
-          processControl(message.payload, message.source);
-        }
-        // 接收後端回傳的離線檔案資料
+        else if (message.source.includes("CAMERA")) { processControl(message.payload, message.source); }
+        // Receive offline API command
         else if (message.source === "SYS" && message.payload && message.payload.type === "OFFLINE_CACHE_LOADED") {
-          const loadedData = message.payload.data; // 預期是一個 Array
+          const loadedData = message.payload.data;
           if (Array.isArray(loadedData) && loadedData.length > 0) {
-            console.log(`[Offline] Loaded ${loadedData.length} records from backend file.`);
-            // 清空當前並載入
             offlineRequestQueue.splice(0, offlineRequestQueue.length, ...loadedData);
-
             startBackendHeartbeat();
           }
         }
-        else { }
-      }
-      else if (message.type === "control" && message.command === "HEARTBEAT_ACK") {
-        lastHeartbeatAck.value = message.payload?.server_ts || Date.now();
-        return;
       }
     }
-    catch (error) {
-      console.error("WebSocket 解析訊息失敗: ", error);
-    }
+    catch (error) { console.error("WebSocket 解析訊息失敗: ", error); }
   }
 
   socket.onclose = () => {
-    console.log(`WebSocket: 連接已關閉，${reconnectDelay/1000}秒後嘗試重連...`);
-    stopHeartbeat();
+    console.log(`WebSocket: 連接已關閉，${reconnectDelay / 1000}秒後嘗試重連...`);
     socket = null;
 
     // 清空狀態
@@ -334,15 +294,11 @@ function connectWebSocket() {
     PlatformState.dn_in = -1;
     PlatformState.start_message = -1;
 
-    // ✅ 指數退避：每次失敗等待時間加倍，上限 30秒，這樣可以避免短時間內產生大量 CLOSE_WAIT
     if (reconnectTimer) clearTimeout(reconnectTimer);
     reconnectTimer = setTimeout(() => { connectWebSocket(); }, reconnectDelay);
-    reconnectDelay = Math.min(reconnectDelay * 1.5, 30000); 
   };
 
-  socket.onerror = (error) => {
-    console.error("WebSocket 發生錯誤: ", error);
-  }
+  socket.onerror = (error) => { console.error("WebSocket 發生錯誤: ", error); }
 }
 
 function sendSocketMessage(command, payload) {
@@ -353,32 +309,18 @@ function sendSocketMessage(command, payload) {
   }
 }
 
-let hbTimer = null;
-const lastHeartbeatAck = ref(null);
-function startHeartbeat() {
-  stopHeartbeat();
-  hbTimer = setInterval(() => {
-    if (socket && socket.readyState === WebSocket.OPEN) {
-      socket.send(JSON.stringify({ type: "control", command: "HEARTBEAT", payload: { ts: Date.now(), page: "scan-ui" } }));
-    }
-  }, 2000);
-}
-
-function stopHeartbeat() {
-  if (hbTimer) {
-    clearInterval(hbTimer);
-    hbTimer = null;
-  }
-} 
-
 // ---- wrappers ----
 const Ajax = async (url, options, time) => {
+  isLoading.value = true;
+
   const controller = new AbortController();
-  setTimeout(() => { controller.abort(); }, (isBackendOnline.value) ? time : 100);
+  const timeoutId = setTimeout(() => { controller.abort(); }, (isBackendOnline.value) ? time : 100);
   let config = { ...options, signal: controller.signal };
 
   try {
     let response = await fetch(url, config);
+    clearTimeout(timeoutId);
+
     if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
     let responseJson = await response.json();
     
@@ -392,7 +334,11 @@ const Ajax = async (url, options, time) => {
       processOfflineQueue();
     }
     return responseJson;
-  } catch (error) {
+  }
+  // Process offline API command storage
+  catch (error) {
+    clearTimeout(timeoutId);
+
     const isWriteApi = url.includes('/write2did') || url.includes('/write2dids');
     const isDeleteApi = url.includes('/Delete_2DID');
 
@@ -401,18 +347,14 @@ const Ajax = async (url, options, time) => {
       
       const payload = JSON.parse(options.body);
       const apiType = url.substring(url.lastIndexOf('/') + 1);
-      
       const offlineRecord = { api: apiType, body: payload, timestamp: Date.now() };
 
-      // 1. 將請求存入前端記憶體 (為了即時顯示或後續處理)
       offlineRequestQueue.push(offlineRecord);
-      
-      // 2. Append API payload to storage in local file
       sendSocketMessage("APPEND_OFFLINE_CACHE", offlineRecord);
 
-      // 3. 標記後台離線，啟動 Heartbeat
+      // Switch to offline mode
       if (isBackendOnline.value) {
-        isBackendOnline.value = false; // 立即標記為離線，阻擋後續請求
+        isBackendOnline.value = false;
         startBackendHeartbeat(); 
         showCustomModal(t("與後台連線中斷，已切換至本地儲存模式"), "alert");
       }
@@ -421,6 +363,7 @@ const Ajax = async (url, options, time) => {
     }
     throw error;
   }
+  finally { setTimeout(() => { isLoading.value = false; }, 100); }
 }
 
 // --- Heartbeat & Recovery Logic --- //
@@ -457,36 +400,25 @@ async function processOfflineQueue() {
   const deleteRequests = [];
 
   currentBatch.forEach((req) => {
-    if (req.api === 'write2did') {
-      uploadBatch.push(req.body);
-    } else if (req.api === 'write2dids') {
-      if (Array.isArray(req.body)) uploadBatch.push(...req.body);
-    } else if (req.api === 'Delete_2DID') {
-      deleteRequests.push(req.body);
-    }
+    if (req.api === 'write2did') uploadBatch.push(req.body);
+    else if (req.api === 'write2dids') uploadBatch.push(...req.body);
+    else if (req.api === 'Delete_2DID') deleteRequests.push(req.body);
   });
 
   try {
     // 2. 處理批量上傳
     if (uploadBatch.length > 0) {
-      const res = await fetch(`${OIS_API_BASE}/api/write2dids`, { method: "POST", headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(uploadBatch) });
+      const res = await Ajax(`${OIS_API_BASE}/api/write2dids`, { method: "POST", headers, body: JSON.stringify(uploadBatch) }, 3000);
       if (!res.ok) throw new Error("Batch upload failed");
       console.log("Batch upload success.");
     }
 
     // 3. 處理刪除請求
-    for (const delReq of deleteRequests) await fetch(`${OIS_API_BASE}/api/Delete_2DID`, { method: "POST", headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(delReq) });
+    for (const delReq of deleteRequests) await Ajax(`${OIS_API_BASE}/api/Delete_2DID`, { method: "POST", headers, body: JSON.stringify({ delReq }) }, 1500);
 
     offlineRequestQueue.splice(0, currentBatch.length);
-
-    // 檢查是否還有新資料進來 (在 await 期間)
-    if (offlineRequestQueue.length === 0) {
-      sendSocketMessage("CLEAR_OFFLINE_CACHE", {});
-      console.log("All offline requests synced and local cache cleared.");
-    } else {
-      console.log("New offline data detected, processing next batch...");
-      processOfflineQueue(); 
-    }
+    if (offlineRequestQueue.length === 0) sendSocketMessage("CLEAR_OFFLINE_CACHE", {});
+    else processOfflineQueue();
   } catch (error) {
     console.error("Failed to sync offline queue:", error);
     startBackendHeartbeat();
@@ -557,9 +489,9 @@ async function validateEmpId(empId) {
   }
 }
 
-async function validateWorkOrder(workOrder) {
+async function validateWorkOrder(workOrder, insert_to_database = false) {
   try {
-    const res = await Ajax(`${OIS_API_BASE}/api/workorder`, { method: 'POST', headers, body: JSON.stringify({ emp_no: info.employeeId, workorder: workOrder, insert_to_database: true }) }, 3000);
+    const res = await Ajax(`${OIS_API_BASE}/api/workorder`, { method: 'POST', headers, body: JSON.stringify({ emp_no: info.employeeId, workorder: workOrder, insert_to_database }) }, 3000);
 
     if (res.success && res.data) {
       const d = res.data;
@@ -591,7 +523,6 @@ async function validate2DID(twodid) {
       return { ret_type: "NG", workOrder: info.workOrder, item: info.productItem, detail: "跳站" };
     }
     else if (sheet_info.twodid_step === info.workStep) {
-      await sheetReport(twodid, sheet_info.panel_no, "NG", "重工");
       return { ret_type: "NG", workOrder: info.workOrder, item: info.productItem, detail: "重工" };
     }
 
@@ -606,65 +537,30 @@ async function validate2DID(twodid) {
   }
 
   // This 2DID has detect in the history and reported error to server, just skip
-  if (other_2DID_dict[twodid]) {
-    return other_2DID_dict[twodid];
-  }
+  if (other_2DID_dict[twodid]) return other_2DID_dict[twodid];
 
   let detail = "";
-  // This 2DID has not report error in the history, but in the requested 2DID dict
-  if (requested_2DID_dict[twodid]) {
-    const twodid_info = requested_2DID_dict[twodid];
-    if (twodid_info.item != info.productItem) detail += "混品目;"; 
-    else if (twodid_info.workOrder != info.workOrder) detail += "混工單;";
-
-    if (detail === "") {
-      await showCustomModal(t("MES系統無該製品資訊"));
-      detail = "異常錯誤";
-    }
-    else {
-      other_2DID_dict[twodid] = { ret_type: "NG", workOrder: twodid_info.workOrder, item: twodid_info.item, detail: (detail === "") ? "異常錯誤" : detail };
-      await sheetReport(twodid, twodid_info.panel_no, "NG", (detail === "") ? "異常錯誤" : detail);
-    }
-
-    return { ret_type: "NG", workOrder: twodid_info.workOrder, item: twodid_info.item, detail: (detail === "") ? "異常錯誤" : detail};
-  }
-
   // This 2DID has not detect in the history requested need to get the information from server
   try {
     const res_json = await Ajax(`${OIS_API_BASE}/api/twodid`, { method: 'POST', headers, body: JSON.stringify({ emp_no : info.employeeId, twodid }) }, 1000);
     if (res_json.success) {
-      const [_, workOrder, productItem, workStep] = res_json.result.result.split(";");
+      const [res_ok, workOrder, productItem, workStep] = res_json.result.result.split(";");
 
-      if (productItem != info.productItem) detail += "混品目;";
-      else if (workOrder != info.workOrder) detail += "混工單;";
-      other_2DID_dict[twodid] = { ret_type: "NG", workOrder: workOrder, item: productItem, detail: (detail == "") ? "異常錯誤" : detail };
+      if (res_ok == "OK") {
+        if (productItem != info.productItem) detail += "混品目;";
+        else if (workOrder != info.workOrder) detail += "混工單;";
 
-      if (detail != ""){
-        const panels_info = await validateWorkOrder(workOrder);
-        if (panels_info) {
-          create2DIDDict(panels_info, false, false);
-          const twodid_info = requested_2DID_dict[twodid];
-          await sheetReport(twodid, twodid_info.panel_no, "NG", detail);
-        }
-        else {
-          await showCustomModal(t("此2DID之工單查無任何資料，因此不上傳資訊"));
-        }
+        other_2DID_dict[twodid] = { ret_type: "NG", workStepName: workStep, workOrder: workOrder, item: productItem, detail: (detail == "") ? "異常錯誤" : detail };
+
+        return { ret_type: "NG", workStepName: workStep, workOrder: workOrder, item: productItem, detail: (detail == "") ? "異常錯誤" : detail };
       }
-
-      return { ret_type: "NG", workOrder: workOrder, item: productItem, detail: (detail == "") ? "異常錯誤" : detail };
     }
-
-    if (res.success == false && res.type == "mes_offline") {
-      await showCustomModal(t('因與 IT server 網路終端，因此 2DID 資訊查詢失敗'));
-    }
+    if (res.success == false && res.type == "mes_offline") await showCustomModal(t('因與 IT server 網路終端，因此 2DID 資訊查詢失敗'));
 
     other_2DID_dict[twodid] = { ret_type: "NG", workOrder: "查無工單", item: "查無品目", detail: "異常錯誤" };
     return { ret_type: "NG", workOrder: "查無工單", item: "查無品目", detail: "異常錯誤" };
   }
-  catch (error) {
-    await showCustomModal(t("驗證2DID發生錯誤，請確認網路連線"));
-    // console.error("驗證2DID發生錯誤，請確認網路連線: ", error);
-  }
+  catch (error) { await showCustomModal(t("驗證2DID發生錯誤，請確認網路連線")); }
 
   return { ret_type: "NG", workOrder: "查無工單", item: "查無品目", detail: "異常錯誤" };
 }
@@ -678,7 +574,6 @@ function changeStage(s) {
 
 // Reset alls storage data
 function resetAll() {
-  Object.assign(requested_2DID_dict, {});
   Object.assign(expected_2DID_dict, {});
   Object.assign(scanned_2DID_dict, {});
   Object.assign(other_2DID_dict, {});
@@ -695,34 +590,26 @@ function resetAll() {
 }
 
 // Storage history request and list expected 2DID in target work order
-function create2DIDDict(panelList, initial = true, addExpected = true) {
+function create2DIDDict(panelList, initial = true) {
   const sht_no_list = panelList.sht_no;
   const panel_no_list = panelList.panel_no;
   const twodid_step_list = panelList.twodid_step;
   const twodid_type_list = panelList.twodid_type;
 
   if (initial){
-    Object.assign(requested_2DID_dict, {});
     Object.assign(expected_2DID_dict, {});
     Object.assign(scanned_2DID_dict, {});
     Object.assign(other_2DID_dict, {});
   }
 
-  for (let index = 0; index < panelList.panel_num; index++) {
-    requested_2DID_dict[sht_no_list[index]] = { workOrder: panelList.workorder, item: panelList.item, workStep: panelList.workStep, panel_no: panel_no_list[index], twodid_step: twodid_step_list[index], twodid_type: twodid_type_list[index] };
-    if (addExpected){
-      expected_2DID_dict[sht_no_list[index]] = { panel_no: panel_no_list[index], twodid_step: twodid_step_list[index], twodid_type: twodid_type_list[index] };
-    }
-  }
+  for (let index = 0; index < panelList.panel_num; index++) expected_2DID_dict[sht_no_list[index]] = { panel_no: panel_no_list[index], twodid_step: twodid_step_list[index], twodid_type: twodid_type_list[index] };
 
-  if (addExpected) {
-    info.cmd236_flag = panelList.cmd236_flag;
-    if (Array.isArray(panelList.scanned_data) && panelList.scanned_data.length > 0) {
-      for (const sd of panelList.scanned_data) {
-        scanned_2DID_dict[sd.sheet_no] = { timestamp: sd.timestamp, ret_type: sd.twodid_type, workOrder: info.workOrder, item: info.productItem, detail: sd.twodid_status };
-        if (sd.twodid_type === 'OK') info.OK_num += 1;
-        else if (sd.twodid_type === 'NG') info.NG_num += 1;
-      }
+  info.cmd236_flag = panelList.cmd236_flag;
+  if (Array.isArray(panelList.scanned_data) && panelList.scanned_data.length > 0) {
+    for (const sd of panelList.scanned_data) {
+      scanned_2DID_dict[sd.sheet_no] = { timestamp: sd.timestamp, ret_type: sd.twodid_type, workOrder: info.workOrder, item: info.productItem, detail: sd.twodid_status };
+      if (sd.twodid_type === 'OK') info.OK_num += 1;
+      else if (sd.twodid_type === 'NG') info.NG_num += 1;
     }
   }
 }
@@ -750,7 +637,7 @@ const handleInfoInput = async (data) => {
       return;
     }
 
-    const valid = await validateWorkOrder(value);
+    const valid = await validateWorkOrder(value, true);
     if (valid && valid.workStep !== ""){
       info.workOrder = valid.workorder;
       info.productItem = valid.item;
@@ -765,14 +652,8 @@ const handleInfoInput = async (data) => {
 }
 
 // Check platform at loading area
-function detectTargetPlatform() {
-  if (PlatformState.up_in != 1) return up_platform_2DID;
-  else return dn_platform_2DID;
-}
-function detectOtherPlatform() {
-  if (PlatformState.up_in == 1) return up_platform_2DID;
-  else return dn_platform_2DID;
-}
+function detectTargetPlatform() { return (PlatformState.up_in != 1) ? up_platform_2DID : dn_platform_2DID; }
+function detectOtherPlatform() { return (PlatformState.up_in == 1) ? up_platform_2DID : dn_platform_2DID; }
 
 // Process 2DID control
 const processControl = async (data, source) => {
@@ -798,17 +679,13 @@ const processControl = async (data, source) => {
   // Receive camera timeout signal
   if (value == "TIMEOUT_BLANK") {
     const lastArea2DID = source.startsWith("CAMERA_LEFT") ? side_history_2DID_list.left[0] : side_history_2DID_list.right[0];
-    if (!lastArea2DID || Date.now() - lastArea2DID.timestamp > 1500) {
-      Object.assign(targetPlatformArea, { pdcode: "等待掃描...", ret_type: "", detail: "" });
-    }
+    if (!lastArea2DID || Date.now() - lastArea2DID.timestamp > 1500) Object.assign(targetPlatformArea, { pdcode: "等待掃描...", ret_type: "", detail: "" });
 
     // Detect force information
     if (forceCommand.command === true && (forceCommand.triggerTime && Date.now() - forceCommand.triggerTime < forceTriggerPeriod) && (targetPlatform.left.ret_type === "OK" || targetPlatform.right.ret_type === "OK")) {
       sendSocketMessage("GO_NOGO", 1);
     }
-    else {
-      sendSocketMessage("GO_NOGO", 0);
-    }
+    else sendSocketMessage("GO_NOGO", 0);
     return;
   }
 
@@ -819,10 +696,7 @@ const processControl = async (data, source) => {
 
   const two_camera_pass = rec.ret_type == "OK" && ((targetPlatform.left.ret_type == 'OK' && source.startsWith("CAMERA_RIGHT")) || (targetPlatform.right.ret_type && source.startsWith("CAMERA_LEFT")))
   if (info.OK_num === info.panel_num || ((info.OK_num == info.panel_num - 1) && two_camera_pass)) {
-    if (rec.ret_type == "OK") {
-      rec.ret_type = "NG";
-      rec.detail = "超過 PANEL 上限";
-    }
+    if (rec.ret_type == "OK") Object.assign(rec, { ...rec, ret_type: "NG", detail: "超過 PANEL 上限" });
     await showCustomModal(t('已達 PANEL 數上限，因此無法綁定。'));
   }
 
@@ -844,12 +718,8 @@ const processControl = async (data, source) => {
   }
 
   // Filtered short period repeated 2DID to record
-  if (history_2DID_dict[value]) {
-    history_2DID_dict[value].timestamp = Date.now();
-  }
-  else {
-    history_2DID_dict[value] = { ...rec };
-  }
+  if (history_2DID_dict[value]) history_2DID_dict[value].timestamp = Date.now();
+  else history_2DID_dict[value] = { ...rec };
 
   // Check 2DID is processed 2DID
   if (value == targetPlatformArea.pdcode || value == otherPlatformArea.pdcode) {
@@ -859,9 +729,7 @@ const processControl = async (data, source) => {
     else if (value == dnPlatformUpload2DIDArea.pdcode) dnPlatformUpload2DIDArea.detect = true;
   }
   // Filled the information for frontend
-  else if (value != otherPlatformArea.pdcode) {
-    Object.assign(targetPlatformArea, { pdcode: value, ret_type: validResult.ret_type, detail: validResult.detail });
-  }
+  else if (value != otherPlatformArea.pdcode) Object.assign(targetPlatformArea, { pdcode: value, ret_type: validResult.ret_type, detail: validResult.detail });
 
   // Send M86, M87 command to PLC
   const oneSheetNG = targetPlatform.left.ret_type == "NG" || targetPlatform.right.ret_type == "NG";
@@ -873,9 +741,7 @@ const processControl = async (data, source) => {
   else if (stage.value == "twoDID" && ((targetPlatform.left.ret_type === "OK" && targetPlatform.right.ret_type === "OK" && !CompleteSheet) || ((info.OK_num == info.panel_num - 1) && lastoneSheetOK))) {
     sendSocketMessage("GO_NOGO", 1);
   }
-  else {
-    sendSocketMessage("GO_NOGO", 0);
-  }
+  else sendSocketMessage("GO_NOGO", 0);
 }
 
 watch(
@@ -889,14 +755,8 @@ watch(
 
 async function scanedSheetRecord(platform, info) {
   let targetPlatformUpload2DID = (info == "up") ? last_OK_upload_2DID.up : last_OK_upload_2DID.dn;
-
-  if (platform.left.ret_type == "OK" && !scanned_2DID_dict[platform.left.pdcode]) {
-    Object.assign(targetPlatformUpload2DID.left, {pdcode: platform.left.pdcode, detect: false});
-  }
-
-  if (platform.right.ret_type == "OK" && !scanned_2DID_dict[platform.right.pdcode]) {
-    Object.assign(targetPlatformUpload2DID.right, {pdcode: platform.right.pdcode, detect: false});
-  }
+  if (platform.left.ret_type == "OK" && !scanned_2DID_dict[platform.left.pdcode]) Object.assign(targetPlatformUpload2DID.left, {pdcode: platform.left.pdcode, detect: false});
+  if (platform.right.ret_type == "OK" && !scanned_2DID_dict[platform.right.pdcode]) Object.assign(targetPlatformUpload2DID.right, {pdcode: platform.right.pdcode, detect: false});
 }
 
 async function lastOKUploadSheetDetect(info) {
@@ -979,33 +839,25 @@ const completeAllScanned = async () => {
 
   if (info.cmd236_flag == false){
     try {
-      console.log("fill other products NG");
-
-      let notScanned_2DID_list = [];
-      for (const [pdcode, sinfo] of Object.entries(expected_2DID_dict)) {
-        if (!scanned_2DID_dict[pdcode]) {
-          notScanned_2DID_list.push({ emp_no: info.employeeId, workOrder: info.workOrder, workStep: info.workStep, item: info.productItem, sht_no: pdcode, panel_no: sinfo.panel_no, twodid_type: "NG", remark: "未投入，作業結束" })
-        }
-      }
+      const base = { emp_no: info.employeeId, workOrder: info.workOrder, workStep: info.workStep, item: info.productItem, twodid_type: "NG", remark: "未投入，作業結束" }
+      let notScanned_2DID_list = Object.entries(expected_2DID_dict).filter(([pdcode]) => !scanned_2DID_dict?.[pdcode]).map(([pdcode, sinfo]) => ({ ...base, sht_no: pdcode, panel_no: sinfo.panel_no}));
       
       await Ajax(`${OIS_API_BASE}/api/write2dids`, { method: "POST", headers, body: JSON.stringify(notScanned_2DID_list) }, 3000);
       await Ajax(`${OIS_API_BASE}/api/Delete_2DID`, { method: "POST", headers, body: JSON.stringify({ workorder: info.workOrder }) }, 1500);
     }
     catch (error) {
-      console.error("清除 2DID 資料失敗");
       await showCustomModal(t("工單上傳失敗，請確認網路連線！"));
       return;
     }
-    await showCustomModal(t("作業已完成！"));
   }
 
+  await showCustomModal(t("作業已完成！"));
   resetAll();
 }
 
 // --- Window Control Function --- //
 onMounted(async () => { connectWebSocket(); });
-onUnmounted(() => { 
-  stopHeartbeat();
+onUnmounted(() => {
   if (socket) socket.close();
 })
 </script>
@@ -1138,4 +990,23 @@ html, body, #app { height: 100%; margin: 0; padding: 0; overflow: hidden; font-f
 
 .zone-row .platform-indicator-container { align-self: center; width: 80px; }
 .zone-row:first-child .platform-label { min-height: 80px; padding: 5px 5px; font-size: 1.1rem; }
+
+/* Loading Overlay Style */
+.loading-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.7); /* 深色遮罩 */
+  backdrop-filter: blur(5px);      /* 模糊背景 */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 9999; /* 確保在最上層 (但在 modal 之下或之上看需求) */
+}
+.loading-content { display: flex; flex-direction: column; align-items: center; gap: 1.5rem; background: rgba(21, 22, 46, 0.9); padding: 2rem 3rem; border-radius: 12px; border: 1px solid var(--primary-color); box-shadow: 0 0 20px rgba(41, 255, 196, 0.3); }
+.loading-content p { color: var(--primary-color); font-size: 1.5rem; font-weight: bold; margin: 0; }
+.spinner { width: 50px; height: 50px; border: 5px solid rgba(41, 255, 196, 0.3); border-top: 5px solid var(--primary-color); border-radius: 50%; animation: spin 1s linear infinite; }
+@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 </style>

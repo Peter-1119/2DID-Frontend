@@ -127,26 +127,24 @@
         <div v-else class="initial-prompt"><img src="./components/icons/search.png" width="50px">{{ t("請刷入工號與工單以開始作業") }}</div>
       </main>
       <footer class="panel-footer">
-        <button class="btn btn-resetuser" @click.stop="employeeClear">{{ t('換人生產') }}</button>
+        <button class="btn btn-resetuser" @click.stop="employeeClear" @mousedown.prevent>{{ t('換人生產') }}</button>
         <!-- <button class="btn btn-reset" @click.stop="resetAll">{{ t('重整') }} (Reset)</button> -->
-        <button class="btn btn-execute" @click.stop="forceExecute">{{ t('強制執行') }}</button>
-        <button class="btn btn-complete" @click.stop="completeAllScanned">{{ t('完成') }} (Complete)</button>
+        <button class="btn btn-execute" @click.stop="forceExecute" @mousedown.prevent>{{ t('強制執行') }}</button>
+        <button class="btn btn-complete" @click.stop="completeAllScanned" @mousedown.prevent>{{ t('完成') }} (Complete)</button>
       </footer>
    </div>
   </div>
-  
-  <dialog ref="customModal" class="custom-modal" @cancel.prevent>
-    <div class="modal-content">
-      <p class="modal-message">{{ modalMessage }}</p>
-      <div class="modal-actions" v-if="modalType === 'confirm'">
-        <button class="btn btn-modal-cancel" @click="cancelModal">{{ t('取消') }}</button>
-        <button class="btn btn-modal-confirm" @click="confirmModal">{{ t('確定') }}</button>
-      </div>
-      <div class="modal-actions" v-else>
-        <button class="btn btn-modal-confirm" @click="closeModal">{{ t('確定') }}</button>
+
+  <div v-if="Modal" class="window-wrapper">
+    <div class="custom-modal">
+      <div class="modal-content">
+        <p class="modal-message">{{ modalMessage }}</p>
+        <div class="modal-actions">
+          <button class="btn btn-modal-confirm" @click="Modal = false">{{ t('確定') }}</button>
+        </div>
       </div>
     </div>
-  </dialog>
+  </div>
 
   <div v-if="isLoading" class="loading-overlay">
     <div class="loading-content">
@@ -312,6 +310,7 @@ function sendSocketMessage(command, payload) {
 // ---- wrappers ----
 const Ajax = async (url, options, time) => {
   isLoading.value = true;
+  console.log("isBackendOnline.value: ", isBackendOnline.value);
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => { controller.abort(); }, (isBackendOnline.value) ? time : 100);
@@ -339,6 +338,13 @@ const Ajax = async (url, options, time) => {
   catch (error) {
     clearTimeout(timeoutId);
 
+    // Switch to offline mode
+    if (isBackendOnline.value) {
+      isBackendOnline.value = false;
+      startBackendHeartbeat(); 
+      showCustomModal(t("與後台連線中斷，已切換至本地儲存模式"), "alert");
+    }
+
     const isWriteApi = url.includes('/write2did') || url.includes('/write2dids');
     const isDeleteApi = url.includes('/Delete_2DID');
 
@@ -352,18 +358,11 @@ const Ajax = async (url, options, time) => {
       offlineRequestQueue.push(offlineRecord);
       sendSocketMessage("APPEND_OFFLINE_CACHE", offlineRecord);
 
-      // Switch to offline mode
-      if (isBackendOnline.value) {
-        isBackendOnline.value = false;
-        startBackendHeartbeat(); 
-        showCustomModal(t("與後台連線中斷，已切換至本地儲存模式"), "alert");
-      }
-
       return { success: true, offline: true };
     }
     throw error;
   }
-  finally { setTimeout(() => { isLoading.value = false; }, 100); }
+  finally { isLoading.value = false; }
 }
 
 // --- Heartbeat & Recovery Logic --- //
@@ -426,43 +425,11 @@ async function processOfflineQueue() {
 }
 
 // --- Custom Modal --- //
-const customModal = ref(null);
+const Modal = ref(false);
 const modalMessage = ref('');
-const modalType = ref('alert'); // 'alert' or 'confirm'
-let resolveModalPromise = null;
-
-const showCustomModal = (message, type = 'alert') => {
+const showCustomModal = (message) => {
   modalMessage.value = message;
-  modalType.value = type;
-  if (customModal.value){
-    customModal.value.showModal();
-  }
-
-  return new Promise((resolve) => { resolveModalPromise = resolve; });
-};
-
-const closeModal = () => {
-  customModal.value.close();
-  if (resolveModalPromise) {
-    resolveModalPromise(true);
-    resolveModalPromise = null;
-  }
-};
-
-const confirmModal = () => {
-  customModal.value.close();
-  if (resolveModalPromise) {
-    resolveModalPromise(true);
-    resolveModalPromise = null;
-  }
-};
-
-const cancelModal = () => {
-  customModal.value.close();
-  if (resolveModalPromise) {
-    resolveModalPromise(false);
-    resolveModalPromise = null;
-  }
+  Modal.value = true;
 };
 
 // --- API Request --- //
@@ -478,13 +445,12 @@ async function validateEmpId(empId) {
       const {empNo, empName} = json.data;
       return {empNo, empName};
     } else {
-      // await showCustomModal(`工號驗證失敗：${json.message || '未知錯誤'}`);
-      await showCustomModal(t('工號驗證失敗'));
+      showCustomModal(t('工號驗證失敗'));
       return false;
     }
   } catch(error) {
     console.error("validateEmpId 發生錯誤:", error);
-    await showCustomModal(t('工號驗證時發生網路錯誤：請確認網路連線'));
+    showCustomModal(t('工號驗證時發生網路錯誤：請確認網路連線'));
     return false;
   }
 }
@@ -499,16 +465,16 @@ async function validateWorkOrder(workOrder, insert_to_database = false) {
     }
 
     if (res.success == false && res.type == "mes_offline") {
-      await showCustomModal(t('因與 IT server 網路中斷，因此工單查詢失敗'));
+      showCustomModal(t('因與 IT server 網路中斷，因此工單查詢失敗'));
       return null;
     }
 
-    await showCustomModal(t('工單驗證失敗：查無資料'));
+    showCustomModal(t('工單驗證失敗：查無資料'));
     return null;
   }
   catch (error) {
     console.error("validateWorkOrder 發生錯誤: ", error)
-    await showCustomModal(t('工單驗證時發生網路錯誤，請確認網路連線'));
+    showCustomModal(t('工單驗證時發生網路錯誤，請確認網路連線'));
     return null;
   }
 }
@@ -555,12 +521,12 @@ async function validate2DID(twodid) {
         return { ret_type: "NG", workStepName: workStep, workOrder: workOrder, item: productItem, detail: (detail == "") ? "異常錯誤" : detail };
       }
     }
-    if (res.success == false && res.type == "mes_offline") await showCustomModal(t('因與 IT server 網路終端，因此 2DID 資訊查詢失敗'));
+    if (res.success == false && res.type == "mes_offline") showCustomModal(t('因與 IT server 網路終端，因此 2DID 資訊查詢失敗'));
 
     other_2DID_dict[twodid] = { ret_type: "NG", workOrder: "查無工單", item: "查無品目", detail: "異常錯誤" };
     return { ret_type: "NG", workOrder: "查無工單", item: "查無品目", detail: "異常錯誤" };
   }
-  catch (error) { await showCustomModal(t("驗證2DID發生錯誤，請確認網路連線")); }
+  catch (error) { showCustomModal(t("驗證2DID發生錯誤，請確認網路連線")); }
 
   return { ret_type: "NG", workOrder: "查無工單", item: "查無品目", detail: "異常錯誤" };
 }
@@ -633,7 +599,7 @@ const handleInfoInput = async (data) => {
 
   else if (stage.value === "workOrder") {
     if (value.length < 8 || value.length > 11) {
-      await showCustomModal(t("工單格式不正確，請重新掃描。"));
+      showCustomModal(t("工單格式不正確，請重新掃描。"));
       return;
     }
 
@@ -666,7 +632,7 @@ const processControl = async (data, source) => {
   // 7. Send M86, M87 status to local python
   const value = String(data).replace(/[\x00-\x1F\x7F-\x9F]/g, "").trim().toUpperCase();
   if (value.length !== 13) {
-    await showCustomModal(t("產品條碼長度不正確，請重新掃描。"));
+    showCustomModal(t("產品條碼長度不正確，請重新掃描。"));
     return;
   }
 
@@ -697,7 +663,7 @@ const processControl = async (data, source) => {
   const two_camera_pass = rec.ret_type == "OK" && ((targetPlatform.left.ret_type == 'OK' && source.startsWith("CAMERA_RIGHT")) || (targetPlatform.right.ret_type && source.startsWith("CAMERA_LEFT")))
   if (info.OK_num === info.panel_num || ((info.OK_num == info.panel_num - 1) && two_camera_pass)) {
     if (rec.ret_type == "OK") Object.assign(rec, { ...rec, ret_type: "NG", detail: "超過 PANEL 上限" });
-    await showCustomModal(t('已達 PANEL 數上限，因此無法綁定。'));
+    showCustomModal(t('已達 PANEL 數上限，因此無法綁定。'));
   }
 
   // Filtered short period repeated 2DID for frontend log
@@ -786,14 +752,14 @@ const sheetReport = async(pdcode, panel_no, type, detail) => {
     scanned_2DID_dict[pdcode] = { timestamp: Date.now(), ret_type: type, workOrder: info.workOrder, item: info.productItem, detail };
 
     try { await UploadSheet(pdcode, panel_no, type, detail); } 
-    catch (error) { await showCustomModal(t(`製品 ${type} 狀態上傳失敗，請確認網路連線！`)); }
+    catch (error) { showCustomModal(t(`製品 ${type} 狀態上傳失敗，請確認網路連線！`)); }
 
     if (type == "OK") info.OK_num += 1;
     else if (type == "NG") info.NG_num += 1;
   }
   else if (!expected_2DID_dict[pdcode] && !other_2DID_dict[pdcode]){
     try { await UploadSheet(pdcode, panel_no, type, detail); } 
-    catch (error) { await showCustomModal(t(`製品 ${type} 狀態上傳失敗，請確認網路連線！`)); }
+    catch (error) { showCustomModal(t(`製品 ${type} 狀態上傳失敗，請確認網路連線！`)); }
   }
 }
 
@@ -812,12 +778,12 @@ function employeeClear() {
 async function forceExecute() {
   let targetPlatform = detectTargetPlatform();
   if (targetPlatform == null) {
-    await showCustomModal(t("請等待平台退回上料區"));
+    showCustomModal(t("請等待平台退回上料區"));
     return;
   }
 
   if (info.OK_num == info.panel_num || ((info.OK_num == info.panel_num - 1) && targetPlatform.left.ret_type === "OK" && targetPlatform.right.ret_type === "OK")) {
-    await showCustomModal(t("作業後將達 PANEL 數上限，因此無法繼續執行。"));
+    showCustomModal(t("作業後將達 PANEL 數上限，因此無法繼續執行。"));
     return;
   }
 
@@ -828,12 +794,12 @@ async function forceExecute() {
     return;
   }
 
-  await showCustomModal(t("請放入至少放入一個OK製品"));
+  showCustomModal(t("請放入至少放入一個OK製品"));
 }
 
 const completeAllScanned = async () => {
   if ((up_platform_2DID.left?.ret_type != "" || up_platform_2DID.right?.ret_type != "" || dn_platform_2DID.left.ret_type != "" || dn_platform_2DID.right.ret_type != "")) {
-    await showCustomModal(t("請保持平台無任何製品"));
+    showCustomModal(t("請保持平台無任何製品"));
     return;
   }
 
@@ -843,15 +809,15 @@ const completeAllScanned = async () => {
       let notScanned_2DID_list = Object.entries(expected_2DID_dict).filter(([pdcode]) => !scanned_2DID_dict?.[pdcode]).map(([pdcode, sinfo]) => ({ ...base, sht_no: pdcode, panel_no: sinfo.panel_no}));
       
       await Ajax(`${OIS_API_BASE}/api/write2dids`, { method: "POST", headers, body: JSON.stringify(notScanned_2DID_list) }, 3000);
-      await Ajax(`${OIS_API_BASE}/api/Delete_2DID`, { method: "POST", headers, body: JSON.stringify({ workorder: info.workOrder }) }, 1500);
     }
     catch (error) {
-      await showCustomModal(t("工單上傳失敗，請確認網路連線！"));
+      showCustomModal(t("工單上傳失敗，請確認網路連線！"));
       return;
     }
   }
 
-  await showCustomModal(t("作業已完成！"));
+  await Ajax(`${OIS_API_BASE}/api/Delete_2DID`, { method: "POST", headers, body: JSON.stringify({ workorder: info.workOrder }) }, 1500);
+  showCustomModal(t("作業已完成！"));
   resetAll();
 }
 
@@ -978,6 +944,7 @@ html, body, #app { height: 100%; margin: 0; padding: 0; overflow: hidden; font-f
 .btn-complete:hover { box-shadow: 0 0 10px var(--primary-color); }
 .btn:disabled { background: var(--waiting-color); color: #333; cursor: not-allowed; opacity: 0.6; }
 
+.window-wrapper { position: fixed; display: flex; justify-content: center; align-items: center; top: 0; left: 0; width: 100%; height: 100%; z-index: 1001; background-color: rgba(0, 0, 0, 0.7); }
 .custom-modal { border: 1px solid var(--panel-border); background: var(--panel-bg); box-shadow: 0 0 40px var(--glow-color); backdrop-filter: blur(15px); color: var(--text-color); border-radius: 12px; padding: 2.5rem 3.5rem; width: clamp(300px, 60vw, 700px); max-width: 90%; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 1000; }
 .custom-modal::backdrop { background: rgba(0, 0, 0, 0.7); backdrop-filter: blur(8px); }
 .modal-content { display: flex; flex-direction: column; gap: 2rem; align-items: center; }

@@ -50,10 +50,10 @@
                     <h2 class="zone-title">{{ t('作業區') }}</h2>
                     <div class="zone-grid">
                       <div class="camera-block" :class="`status-${getAreaStatus(inProcessPlatform.left)}`">
-                        <span class="block-pdcode">{{ inProcessPlatform.left?.pdcode || "---" }}</span>
+                        <span class="block-panel">{{ inProcessPlatform.left?.panel || "---" }}</span>
                       </div>
                       <div class="camera-block" :class="`status-${getAreaStatus(inProcessPlatform.right)}`">
-                        <span class="block-pdcode">{{ inProcessPlatform.right?.pdcode || "---" }}</span>
+                        <span class="block-panel">{{ inProcessPlatform.right?.panel || "---" }}</span>
                       </div>
                     </div>
                   </div>
@@ -68,14 +68,14 @@
                     <div class="zone-grid">
                       <div class="camera-block staging" :class="`status-${getAreaStatus(onloadingPlatform.left)}`">
                         <span class="block-label">{{ t('準備區-左') }}</span>
-                        <span v-if="get2DIDStatusShow(onloadingPlatform.left?.ret_type)" class="block-pdcode large" :class="`status-text-${getAreaStatus(onloadingPlatform.left)}`">{{ onloadingPlatform.left?.ret_type }}</span>
-                        <span class="block-pdcode large">{{ onloadingPlatform.left?.pdcode || t("等待掃描...") }}</span>
+                        <span v-if="get2DIDStatusShow(onloadingPlatform.left?.ret_type)" class="block-panel large" :class="`status-text-${getAreaStatus(onloadingPlatform.left)}`">{{ onloadingPlatform.left?.ret_type }}</span>
+                        <span class="block-panel large">{{ onloadingPlatform.left?.panel || t("等待掃描...") }}</span>
                       </div>
                       
                       <div class="camera-block staging" :class="`status-${getAreaStatus(onloadingPlatform.right)}`">
                         <span class="block-label">{{ t('準備區-右') }}</span>
-                        <span v-if="get2DIDStatusShow(onloadingPlatform.right?.ret_type)" class="block-pdcode large" :class="`status-text-${getAreaStatus(onloadingPlatform.right)}`">{{ onloadingPlatform.right?.ret_type }}</span>
-                        <span class="block-pdcode large">{{ onloadingPlatform.right?.pdcode || t("等待掃描...") }}</span>
+                        <span v-if="get2DIDStatusShow(onloadingPlatform.right?.ret_type)" class="block-panel large" :class="`status-text-${getAreaStatus(onloadingPlatform.right)}`">{{ onloadingPlatform.right?.ret_type }}</span>
+                        <span class="block-panel large">{{ onloadingPlatform.right?.panel || t("等待掃描...") }}</span>
                       </div>
                     </div>
                   </div>
@@ -86,36 +86,36 @@
             <div class="status-display-area">
               <div class="status-list-column">
                 <div class="status-list">
-                  <div v-for="item in side_history_2DID_list.left.slice(0, 5)" :key="`${item.pdcode}-${item.timestamp}`" class="history-item-wrapper" :class="{ 'is-ng-item': item.ret_type === 'NG' }">
+                  <div v-for="item in side_history_2DID_list.left.slice(0, 5)" :key="`${item.panel}-${item.timestamp}`" class="history-item-wrapper" :class="{ 'is-ng-item': item.ret_type === 'NG' }">
                     <div class="list-item-top-row">
                       <span class="item-timestamp">{{ formatTime(item.timestamp) }}</span>
-                      <span class="item-pdcode">{{ item.pdcode }}</span>
-                      <span class="item-action-type">({{ t(get2DIDActionType(item.pdcode)) }})</span> 
+                      <span class="item-panel">{{ item.panel }}</span>
+                      <span class="item-action-type">({{ t(get2DIDActionType(item.panel)) }})</span> 
                       <span class="item-status-text" :class="item.ret_type === 'OK' ? 'status-ok' : 'status-ng'">{{ item.ret_type }}</span>
                     </div>
                     <div v-if="item.ret_type === 'NG'" class="list-item-ng-details">
                       <span :title="item.detail">{{ t('原因') }}: {{ t(item.detail) }}</span>
-                      <span v-if="item.workStepName" :title="item.workOrder">{{ item.workOrder }}</span>
-                      <span v-if="item.workStepName" :title="item.item">{{ item.item }}</span>
-                      <span v-if="item.workStepName" :title="item.workStepName">{{ item.workStepName }}</span>
+                      <span v-if="item.workStepName" :title="item.workOrder">{{ t('工單') }}: {{ item.workOrder }}</span>
+                      <span v-if="item.workStepName" :title="item.item">{{ t('品目') }}: {{ item.item }}</span>
+                      <span v-if="item.workStepName" :title="item.workStepName">{{ t('工站') }}: {{ item.workStepName }}</span>
                     </div>
                   </div>
                 </div>
               </div>
               <div class="status-list-column">
                 <div class="status-list">
-                  <div v-for="item in side_history_2DID_list.right.slice(0, 5)" :key="`${item.pdcode}-${item.timestamp}`" class="history-item-wrapper" :class="{ 'is-ng-item': item.ret_type === 'NG' }">
+                  <div v-for="item in side_history_2DID_list.right.slice(0, 5)" :key="`${item.panel}-${item.timestamp}`" class="history-item-wrapper" :class="{ 'is-ng-item': item.ret_type === 'NG' }">
                     <div class="list-item-top-row">
                       <span class="item-timestamp">{{ formatTime(item.timestamp) }}</span>
-                      <span class="item-pdcode">{{ item.pdcode }}</span>
-                      <span class="item-action-type">({{ t(get2DIDActionType(item.pdcode)) }})</span> 
+                      <span class="item-panel">{{ item.panel }}</span>
+                      <span class="item-action-type">({{ t(get2DIDActionType(item.panel)) }})</span> 
                       <span class="item-status-text" :class="item.ret_type === 'OK' ? 'status-ok' : 'status-ng'">{{ item.ret_type }}</span>
                     </div>
                     <div v-if="item.ret_type === 'NG'" class="list-item-ng-details">
                       <span :title="item.detail">{{ t('原因') }}: {{ t(item.detail) }}</span>
-                      <span v-if="item.workStepName" :title="item.workOrder">{{ item.workOrder }}</span>
-                      <span v-if="item.workStepName" :title="item.item">{{ item.item }}</span>
-                      <span v-if="item.workStepName" :title="item.workStepName">{{ item.workStepName }}</span>
+                      <span v-if="item.workStepName" :title="item.workOrder">{{ t('工單') }}: {{ item.workOrder }}</span>
+                      <span v-if="item.workStepName" :title="item.item">{{ t('品目') }}: {{ item.item }}</span>
+                      <span v-if="item.workStepName" :title="item.workStepName">{{ t('工站') }}: {{ item.workStepName }}</span>
                     </div>
                   </div>
                 </div>
@@ -196,7 +196,9 @@ let info = reactive({
   NG_num: 0,
   cmd236_flag: false,
 })
-const emptySlot = () => ({ pdcode: "", ret_type: "", detail: "" });
+const emptySlot = () => ({ panel: "", ret_type: "", detail: "" });
+let twodid_panel_mapping = reactive({});
+let panel_twodid_mapping = reactive({});
 let expected_2DID_dict = reactive({});  // Expected 2DID dict to scaned on this workorder
 let scanned_2DID_dict = reactive({});  // Scanned 2DID dict on this workorder
 let other_2DID_dict = reactive({});  // Reported error 2DID dict
@@ -205,10 +207,10 @@ let side_history_2DID_list = reactive({left: [], right: []});  // List all histo
 let history_2DID_dict = reactive({});  // Save all history scanned 2DID dict
 let up_platform_2DID = reactive({right: emptySlot(), left: emptySlot()});
 let dn_platform_2DID = reactive({right: emptySlot(), left: emptySlot()});
-let last_OK_upload_2DID = reactive({up: {left: {pdcode: "", detect: false}, right: {pdcode: "", detect: false}}, dn: {left: {pdcode: "", detect: false}, right: {pdcode: "", detect: false}}});
+let last_OK_upload_2DID = reactive({up: {left: {panel: "", detect: false}, right: {panel: "", detect: false}}, dn: {left: {panel: "", detect: false}, right: {panel: "", detect: false}}});
 
 // --- Offline & Failover State --- //
-const isBackendOnline = ref(true);
+const isBackendOnline = ref(false);
 let backendHeartbeatTimer = null;
 const offlineRequestQueue = reactive([]);
 
@@ -224,7 +226,7 @@ const getPlatformClass = (text) => {
 };
 const inProcessPlatform = computed(() => { return (PlatformState.up_in == 1) ? up_platform_2DID : dn_platform_2DID; })
 const onloadingPlatform = computed(() => { return (PlatformState.up_in != 1) ? up_platform_2DID : dn_platform_2DID; })
-const get2DIDActionType = (pdcode) => (scanned_2DID_dict[pdcode] && scanned_2DID_dict[pdcode].ret_type == "OK") ? "出" : "進";
+const get2DIDActionType = (panel) => (scanned_2DID_dict[panel] && scanned_2DID_dict[panel].ret_type == "OK") ? "出" : "進";
 const getAreaStatus = (area) => {
   const rt = area?.ret_type || "";
   if (rt === "OK") return "success";
@@ -246,9 +248,9 @@ function connectWebSocket() {
     if (socket && socket.readyState === WebSocket.CONNECTING) socket.close(4000, "connect timeout");
   }, timeoutMs);
   
-  socket.onopen = () => { 
-    console.log("WS Connected");
+  socket.onopen = () => {
     clearTimeout(timer);
+    startBackendHeartbeat();
     sendSocketMessage("LOAD_OFFLINE_CACHE", {});  // backend communicaiton successful then get local storage API
   };
 
@@ -269,6 +271,7 @@ function connectWebSocket() {
         else if (message.source.includes("CAMERA")) { processControl(message.payload, message.source); }
         // Receive offline API command
         else if (message.source === "SYS" && message.payload && message.payload.type === "OFFLINE_CACHE_LOADED") {
+          console.log("Process OFFLINE_CACHE_LOADED");
           const loadedData = message.payload.data;
           if (Array.isArray(loadedData) && loadedData.length > 0) {
             offlineRequestQueue.splice(0, offlineRequestQueue.length, ...loadedData);
@@ -300,16 +303,17 @@ function sendSocketMessage(command, payload) {
   if (socket && socket.readyState === WebSocket.OPEN) {
     let message = { type: "control", command, payload};
     socket.send(JSON.stringify(message));
-    console.log(`[WS發送] command: ${command}, payload: ${payload}`);
   }
 }
 
 // ---- wrappers ----
 const Ajax = async (url, options, time) => {
   isLoading.value = true;
+  loadingMessage.value = "系統處理中...";
 
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => { controller.abort(); }, (isBackendOnline.value) ? time : 100);
+  const timeoutTime = (isBackendOnline.value) ? time : 500;
+  const timeoutId = setTimeout(() => { controller.abort(); }, timeoutTime);
   let config = { ...options, signal: controller.signal };
 
   try {
@@ -371,11 +375,12 @@ function startBackendHeartbeat() {
     try {
       const controller = new AbortController();
       setTimeout(() => controller.abort(), 500); // 0.5s timeout
-      const res = await fetch(`${OIS_API_BASE}/heartbeat`, { method: 'GET', signal: controller.signal });
+      console.log("send heatbeat...");
+      const res = await Ajax(`${OIS_API_BASE}/heartbeat`, { method: 'GET', signal: controller.signal });
+      console.log("res: ", res);
 
-      if (res.ok) {
+      if (res) {
         isBackendOnline.value = true;
-        console.log("Backend Restored. Processing offline queue...");
 
         // Destroy timer and process offline queue
         clearInterval(backendHeartbeatTimer);
@@ -404,7 +409,7 @@ async function processOfflineQueue() {
     // 2. 處理批量上傳
     if (uploadBatch.length > 0) {
       const res = await Ajax(`${OIS_API_BASE}/api/write2dids`, { method: "POST", headers, body: JSON.stringify(uploadBatch) }, 3000);
-      if (!res.ok) throw new Error("Batch upload failed");
+      if (!res.success) throw new Error("Batch upload failed");
       console.log("Batch upload success.");
     }
 
@@ -432,6 +437,7 @@ const showCustomModal = (message) => {
 async function validateEmpId(empId) {
   try {
     const response = await Ajax(`${OIS_API_BASE}/api/validate_emp`, { method: "POST", headers, body: JSON.stringify({ empId }) }, 1500);
+    console.log(response);
     if (response.code === 200 && response.data) return { ...response.data };
     else {
       showCustomModal(t('工號驗證失敗'));
@@ -447,7 +453,6 @@ async function validateEmpId(empId) {
 async function validateWorkOrder(workOrder, insert_to_database = false) {
   try {
     const res = await Ajax(`${OIS_API_BASE}/api/workorder`, { method: 'POST', headers, body: JSON.stringify({ emp_no: info.employeeId, workorder: workOrder, insert_to_database }) }, 3000);
-
     if (res.success && res.data) {
       const d = res.data;
       return { cmd236_flag: d.cmd236_flag, workorder: d.workorder, item: d.item, workStep: d.workStep, panel_num: d.panel_num, sht_no: d.sht_no, panel_no: d.panel_no, twodid_step: d.twodid_step, twodid_type: d.twodid_type, scanned_data: d.scanned_data };
@@ -468,21 +473,21 @@ async function validateWorkOrder(workOrder, insert_to_database = false) {
   }
 }
 
-async function validate2DID(twodid) {
-  if (!twodid) return { ret_type: "NG", workOrder: "N/A", item: "N/A", detail: "條碼異常" };
+async function validate2DID(panel_id) {
+  if (!panel_id) return { ret_type: "NG", workOrder: "N/A", item: "N/A", detail: "條碼異常" };
 
-  const sheet_info = expected_2DID_dict[twodid];
-  if (sheet_info) {
-    if (sheet_info.twodid_type == "Y") {
-      await sheetReport(twodid, sheet_info.panel_no, "NG", "跳站");
+  const panel_info = expected_2DID_dict[panel_id];
+  if (panel_info) {
+    if (panel_info.twodid_type == "Y") {
+      await sheetReport(panel_id, "NG", "跳站");
       return { ret_type: "NG", workOrder: info.workOrder, item: info.productItem, detail: "跳站" };
     }
-    else if (sheet_info.twodid_step === info.workStep) {
-      await sheetReport(twodid, sheet_info.panel_no, "NG", "重工", false);
+    else if (panel_info.twodid_step === info.workStep) {
+      await sheetReport(panel_id, "NG", "重工", false);
       return { ret_type: "NG", workOrder: info.workOrder, item: info.productItem, detail: "重工" };
     }
 
-    const scanned_record = scanned_2DID_dict[twodid];
+    const scanned_record = scanned_2DID_dict[panel_id];
     if (scanned_record && Date.now() - scanned_record.timestamp > unloadPeriodThreshold) {
       return { ret_type: "NG", workOrder: info.workOrder, item: info.productItem, detail: "重工" };
     }
@@ -493,6 +498,7 @@ async function validate2DID(twodid) {
   }
 
   // This 2DID has detect in the history and reported error to server, just skip
+  const twodid = panel_id;
   if (other_2DID_dict[twodid]) return other_2DID_dict[twodid];
 
   let detail = "";
@@ -528,17 +534,22 @@ function changeStage(s) {
   sendSocketMessage("STEP_UPDATE", s);
 }
 
+const clearObj = (obj) => { Object.keys(obj).forEach(key => delete obj[key]); };
 // Reset alls storage data
 function resetAll() {
-  Object.assign(expected_2DID_dict, {});
-  Object.assign(scanned_2DID_dict, {});
-  Object.assign(other_2DID_dict, {});
-  Object.assign(side_history_2DID_dict, {right: {}, left: {}});
-  Object.assign(side_history_2DID_list, {right: [], left: []});
-  Object.assign(history_2DID_dict, {});
+  clearObj(twodid_panel_mapping);
+  clearObj(panel_twodid_mapping);
+  clearObj(expected_2DID_dict);
+  clearObj(scanned_2DID_dict);
+  clearObj(other_2DID_dict);
+  clearObj(history_2DID_dict);
+  clearObj(side_history_2DID_dict.left);
+  clearObj(side_history_2DID_dict.right);
+
+  side_history_2DID_list.left.length = 0;
+  side_history_2DID_list.right.length = 0;
   Object.assign(up_platform_2DID, {right: emptySlot(), left: emptySlot()});
   Object.assign(dn_platform_2DID, {right: emptySlot(), left: emptySlot()});
-
   Object.assign(info, { employeeId: "", employeeName: "", workOrder: "", productItem: "", workStep: "", panel_num: 0, OK_num: 0, NG_num: 0, cmd236_flag: false });
   Object.assign(forceCommand, { command: false, triggerTime: null });
 
@@ -546,26 +557,34 @@ function resetAll() {
 }
 
 // Storage history request and list expected 2DID in target work order
-function create2DIDDict(panelList, initial = true) {
+function create2DIDDict(panelList) {
   const sht_no_list = panelList.sht_no;
   const panel_no_list = panelList.panel_no;
   const twodid_step_list = panelList.twodid_step;
   const twodid_type_list = panelList.twodid_type;
+  info.cmd236_flag = panelList.cmd236_flag;
 
-  if (initial){
-    Object.assign(expected_2DID_dict, {});
-    Object.assign(scanned_2DID_dict, {});
-    Object.assign(other_2DID_dict, {});
+  clearObj(twodid_panel_mapping);
+  clearObj(panel_twodid_mapping);
+  clearObj(expected_2DID_dict);
+  clearObj(scanned_2DID_dict);
+  clearObj(other_2DID_dict);
+
+  for (let index = 0; index < panelList.sht_no.length; index++) {
+    twodid_panel_mapping[sht_no_list[index]] = panel_no_list[index];
+    if (!panel_twodid_mapping[panel_no_list[index]]) panel_twodid_mapping[panel_no_list[index]] = [];
+    panel_twodid_mapping[panel_no_list[index]].push(sht_no_list[index]);
+
+    if (!expected_2DID_dict[panel_no_list[index]]) expected_2DID_dict[panel_no_list[index]] = { twodid_step: twodid_step_list[index], twodid_type: twodid_type_list[index] };
   }
 
-  for (let index = 0; index < panelList.panel_num; index++) expected_2DID_dict[sht_no_list[index]] = { panel_no: panel_no_list[index], twodid_step: twodid_step_list[index], twodid_type: twodid_type_list[index] };
-
-  info.cmd236_flag = panelList.cmd236_flag;
   if (Array.isArray(panelList.scanned_data) && panelList.scanned_data.length > 0) {
     for (const sd of panelList.scanned_data) {
-      scanned_2DID_dict[sd.sheet_no] = { timestamp: sd.timestamp, ret_type: sd.twodid_type, workOrder: info.workOrder, item: info.productItem, detail: sd.twodid_status };
-      if (sd.twodid_type === 'OK') info.OK_num += 1;
-      else if (sd.twodid_type === 'NG') info.NG_num += 1;
+      if (!scanned_2DID_dict[sd.panel_no]){
+        scanned_2DID_dict[sd.panel_no] = { timestamp: sd.timestamp, ret_type: sd.twodid_type, workOrder: info.workOrder, item: info.productItem, detail: sd.twodid_status };
+        if (sd.twodid_type === 'OK') info.OK_num += 1;
+        else if (sd.twodid_type === 'NG') info.NG_num += 1;
+      }
     }
   }
 }
@@ -578,6 +597,7 @@ const handleInfoInput = async (data) => {
 
   if (stage.value === "empId") {
     const result = await validateEmpId(value);
+    // const result = { empNo: "12868", empName: "王巨成" };
 
     if (!result) return;
 
@@ -593,6 +613,7 @@ const handleInfoInput = async (data) => {
     }
 
     const valid = await validateWorkOrder(value, true);
+    console.log("workorder: ", valid);
     if (valid && valid.workStep !== ""){
       info.workOrder = valid.workorder;
       info.productItem = valid.item;
@@ -619,7 +640,7 @@ const processControl = async (data, source) => {
   // 5. Record 2DID information to history dictionary
   // 6. Refresh target platform product information
   // 7. Send M86, M87 status to local python
-  const value = String(data).replace(/[\x00-\x1F\x7F-\x9F]/g, "").trim().toUpperCase();
+  const value = (twodid_panel_mapping[data]) ? twodid_panel_mapping[data] : data;
   if (value.length !== 13) {
     showCustomModal(t("產品條碼長度不正確，請重新掃描。"));
     return;
@@ -634,7 +655,7 @@ const processControl = async (data, source) => {
   // Receive camera timeout signal
   if (value == "TIMEOUT_BLANK") {
     const lastArea2DID = source.startsWith("CAMERA_LEFT") ? side_history_2DID_list.left[0] : side_history_2DID_list.right[0];
-    if (!lastArea2DID || Date.now() - lastArea2DID.timestamp > 1500) Object.assign(targetPlatformArea, { pdcode: "等待掃描...", ret_type: "", detail: "" });
+    if (!lastArea2DID || Date.now() - lastArea2DID.timestamp > 1500) Object.assign(targetPlatformArea, { panel: "等待掃描...", ret_type: "", detail: "" });
 
     // Detect force information
     if (forceCommand.command === true && (forceCommand.triggerTime && Date.now() - forceCommand.triggerTime < forceTriggerPeriod) && (targetPlatform.left.ret_type === "OK" || targetPlatform.right.ret_type === "OK")) {
@@ -645,9 +666,9 @@ const processControl = async (data, source) => {
   }
 
   // Check product validate
-  let targetSheet = (source.startsWith("CAMERA_RIGHT") || source.startsWith("CAMERA_LEFT")) ? value : null;
-  let validResult = await validate2DID(targetSheet);
-  let rec = { timestamp: Date.now(), ret_type: validResult.ret_type, workOrder: validResult.workOrder, item: validResult.item, detail: validResult.detail };
+  let targetPanel = (source.startsWith("CAMERA_RIGHT") || source.startsWith("CAMERA_LEFT")) ? value : null;
+  let validResult = await validate2DID(targetPanel);
+  let rec = { timestamp: Date.now(), workStepName: validResult.workStepName, ret_type: validResult.ret_type, workOrder: validResult.workOrder, item: validResult.item, detail: validResult.detail };
 
   const two_camera_pass = rec.ret_type == "OK" && ((targetPlatform.left.ret_type == 'OK' && source.startsWith("CAMERA_RIGHT")) || (targetPlatform.right.ret_type && source.startsWith("CAMERA_LEFT")))
   if (info.OK_num === info.panel_num || ((info.OK_num == info.panel_num - 1) && two_camera_pass)) {
@@ -658,16 +679,16 @@ const processControl = async (data, source) => {
   // Filtered short period repeated 2DID for frontend log
   const sheet_history = (source.startsWith("CAMERA_LEFT")) ? side_history_2DID_dict.left[value] : side_history_2DID_dict.right[value];
   const last_info = (source.startsWith("CAMERA_LEFT")) ? side_history_2DID_list.left[0] : side_history_2DID_list.right[0];
-  if (sheet_history && (last_info && (last_info.pdcode == value)) && (Date.now() - sheet_history.timestamp < shortPeriodFilterThreshold)) {
+  if (sheet_history && (last_info && (last_info.panel == value)) && (Date.now() - sheet_history.timestamp < shortPeriodFilterThreshold)) {
     sheet_history.timestamp = Date.now();
   }
   else {
     if (source.startsWith("CAMERA_LEFT")) { 
-      side_history_2DID_list.left.unshift({ ...rec, pdcode: value });
+      side_history_2DID_list.left.unshift({ ...rec, panel: value });
       side_history_2DID_dict.left[value] = { ...rec };
     }
     else if (source.startsWith("CAMERA_RIGHT")) {
-      side_history_2DID_list.right.unshift({ ...rec, pdcode: value });
+      side_history_2DID_list.right.unshift({ ...rec, panel: value });
       side_history_2DID_dict.right[value] = { ...rec };
     }
   }
@@ -677,14 +698,14 @@ const processControl = async (data, source) => {
   else history_2DID_dict[value] = { ...rec };
 
   // Check 2DID is processed 2DID
-  if (value == targetPlatformArea.pdcode || value == otherPlatformArea.pdcode) {
+  if (value == targetPlatformArea.panel || value == otherPlatformArea.panel) {
     const upPlatformUpload2DIDArea = (source.startsWith("CAMERA_LEFT")) ? last_OK_upload_2DID.up.left : last_OK_upload_2DID.up.right;
     const dnPlatformUpload2DIDArea = (source.startsWith("CAMERA_RIGHT")) ? last_OK_upload_2DID.dn.left : last_OK_upload_2DID.dn.right;
-    if (value == upPlatformUpload2DIDArea.pdcode) upPlatformUpload2DIDArea.detect = true;
-    else if (value == dnPlatformUpload2DIDArea.pdcode) dnPlatformUpload2DIDArea.detect = true;
+    if (value == upPlatformUpload2DIDArea.panel) upPlatformUpload2DIDArea.detect = true;
+    else if (value == dnPlatformUpload2DIDArea.panel) dnPlatformUpload2DIDArea.detect = true;
   }
   // Filled the information for frontend
-  else if (value != otherPlatformArea.pdcode) Object.assign(targetPlatformArea, { pdcode: value, ret_type: validResult.ret_type, detail: validResult.detail });
+  else if (value != otherPlatformArea.panel) Object.assign(targetPlatformArea, { panel: value, ret_type: validResult.ret_type, detail: validResult.detail });
 
   // Send M86, M87 command to PLC
   const oneSheetNG = targetPlatform.left.ret_type == "NG" || targetPlatform.right.ret_type == "NG";
@@ -710,53 +731,52 @@ watch(
 
 async function scanedSheetRecord(platform, info) {
   let targetPlatformUpload2DID = (info == "up") ? last_OK_upload_2DID.up : last_OK_upload_2DID.dn;
-  if (platform.left.ret_type == "OK" && !scanned_2DID_dict[platform.left.pdcode]) Object.assign(targetPlatformUpload2DID.left, {pdcode: platform.left.pdcode, detect: false});
-  if (platform.right.ret_type == "OK" && !scanned_2DID_dict[platform.right.pdcode]) Object.assign(targetPlatformUpload2DID.right, {pdcode: platform.right.pdcode, detect: false});
+  if (platform.left.ret_type == "OK" && !scanned_2DID_dict[platform.left.panel]) Object.assign(targetPlatformUpload2DID.left, {panel: platform.left.panel, detect: false});
+  if (platform.right.ret_type == "OK" && !scanned_2DID_dict[platform.right.panel]) Object.assign(targetPlatformUpload2DID.right, {panel: platform.right.panel, detect: false});
 }
 
 async function lastOKUploadSheetDetect(info) {
   let targetPlatformUpload2DID = (info == "up") ? last_OK_upload_2DID.up : last_OK_upload_2DID.dn;
-  if ((targetPlatformUpload2DID.left.pdcode != "" && targetPlatformUpload2DID.left.detect == false) || (targetPlatformUpload2DID.right.pdcode != "" && targetPlatformUpload2DID.right.detect == false)) {
+  if ((targetPlatformUpload2DID.left.panel != "" && targetPlatformUpload2DID.left.detect == false) || (targetPlatformUpload2DID.right.panel != "" && targetPlatformUpload2DID.right.detect == false)) {
     showCustomModal(t("進出料製品 2DID 不同，請確認機台是否操作正常"));
   }
 
-  if (history_2DID_dict[targetPlatformUpload2DID.left.pdcode]) {
-    const pdcodeInfo = expected_2DID_dict[targetPlatformUpload2DID.left.pdcode];
-    history_2DID_dict[targetPlatformUpload2DID.left.pdcode].timestamp = Date.now();
-    sheetReport(targetPlatformUpload2DID.left.pdcode, pdcodeInfo.panel_no, "OK", "OK");
+  if (history_2DID_dict[targetPlatformUpload2DID.left.panel]) {
+    history_2DID_dict[targetPlatformUpload2DID.left.panel].timestamp = Date.now();
+    sheetReport(targetPlatformUpload2DID.left.panel, "OK", "OK");
   }
-  if (history_2DID_dict[targetPlatformUpload2DID.right.pdcode]) {
-    const pdcodeInfo = expected_2DID_dict[targetPlatformUpload2DID.right.pdcode];
-    history_2DID_dict[targetPlatformUpload2DID.right.pdcode].timestamp = Date.now();
-    sheetReport(targetPlatformUpload2DID.right.pdcode, pdcodeInfo.panel_no, "OK", "OK");
+  if (history_2DID_dict[targetPlatformUpload2DID.right.panel]) {
+    history_2DID_dict[targetPlatformUpload2DID.right.panel].timestamp = Date.now();
+    sheetReport(targetPlatformUpload2DID.right.panel, "OK", "OK");
   }
   
-  Object.assign(targetPlatformUpload2DID, {left: {pdcode: "", detect: false}, right: {pdcode: "", detect: false}});
+  Object.assign(targetPlatformUpload2DID, {left: {panel: "", detect: false}, right: {panel: "", detect: false}});
 }
 
-const sheetReport = async(pdcode, panel_no, type, detail, report = true) => {
-  if (pdcode && (pdcode.length == 0)) return;
+const sheetReport = async(panel_no, type, detail, report = true) => {
+  if (panel_no && (panel_no.length == 0)) return;
 
-  if (expected_2DID_dict[pdcode] && !scanned_2DID_dict[pdcode]) {
-    scanned_2DID_dict[pdcode] = { timestamp: Date.now(), ret_type: type, workOrder: info.workOrder, item: info.productItem, detail };
+  if (expected_2DID_dict[panel_no] && !scanned_2DID_dict[panel_no]) {
+    scanned_2DID_dict[panel_no] = { timestamp: Date.now(), ret_type: type, workOrder: info.workOrder, item: info.productItem, detail };
 
     if (report){
-      try { await UploadSheet(pdcode, panel_no, type, detail); } 
+      try { await uploadPanel(panel_no, type, detail);} 
       catch (error) { showCustomModal(t(`製品 ${type} 狀態上傳失敗，請確認網路連線！`)); }
     }
 
     if (type == "OK") info.OK_num += 1;
     else if (type == "NG") info.NG_num += 1;
   }
-  else if (!expected_2DID_dict[pdcode] && !other_2DID_dict[pdcode]){
-    try { await UploadSheet(pdcode, panel_no, type, detail); } 
+  else if (!expected_2DID_dict[panel_no] && !other_2DID_dict[panel_no]){
+    try { await uploadPanel(panel_no, type, detail); } 
     catch (error) { showCustomModal(t(`製品 ${type} 狀態上傳失敗，請確認網路連線！`)); }
   }
 }
 
-const UploadSheet = async (pdcode, panel_no, ret_type, status) => {
-  const payload = { emp_no: info.employeeId, workOrder: info.workOrder, item: info.productItem, workStep: info.workStep, sht_no: pdcode, panel_no: panel_no, twodid_type: ret_type, remark: `${status}-IPC` };
-  await Ajax(`${OIS_API_BASE}/api/write2did`, { method: "POST", headers, body: JSON.stringify(payload) }, 200);
+const uploadPanel = async (panel_no, ret_type, status) => {
+  const base = { emp_no: info.employeeId, workOrder: info.workOrder, workStep: info.workStep, item: info.productItem, twodid_type: ret_type, remark: `${status}-IPC` };
+  const payloads = panel_twodid_mapping[panel_no].map(sheet_no => ({ ...base, sht_no: sheet_no, panel_no }));
+  await Ajax(`${OIS_API_BASE}/api/write2dids`, { method: "POST", headers, body: JSON.stringify(payloads) }, 200);
 }
 
 // --- Button Control --- //
@@ -797,7 +817,7 @@ const completeAllScanned = async () => {
   if (info.cmd236_flag == false){
     try {
       const base = { emp_no: info.employeeId, workOrder: info.workOrder, workStep: info.workStep, item: info.productItem, twodid_type: "NG", remark: "未投入，作業結束-IPC" }
-      let notScanned_2DID_list = Object.entries(expected_2DID_dict).filter(([pdcode]) => !scanned_2DID_dict?.[pdcode]).map(([pdcode, sinfo]) => ({ ...base, sht_no: pdcode, panel_no: sinfo.panel_no}));
+      let notScanned_2DID_list = Object.entries(expected_2DID_dict).filter(([panel]) => !scanned_2DID_dict?.[panel]).flatMap(([panel]) => panel_twodid_mapping[panel].map(sheet_no => ({ ...base, sht_no: sheet_no, panel_no: panel })));
       
       await Ajax(`${OIS_API_BASE}/api/write2dids`, { method: "POST", headers, body: JSON.stringify(notScanned_2DID_list) }, 3000);
     }
@@ -813,7 +833,11 @@ const completeAllScanned = async () => {
 }
 
 // --- Window Control Function --- //
-onMounted(async () => { connectWebSocket(); });
+onMounted(async () => {
+  loadingMessage.value = "正在與後台建立連線，請稍後...";
+  isLoading.value = true;
+  connectWebSocket(); 
+});
 onUnmounted(() => {
   if (socket) socket.close();
 })
@@ -894,9 +918,9 @@ html, body, #app { height: 100%; margin: 0; padding: 0; overflow: hidden; font-f
 .camera-block.status-success { border-color: var(--success-color); box-shadow: 0 0 10px var(--success-color); }
 .camera-block.status-error { border-color: var(--error-color); box-shadow: 0 0 10px var(--error-color); }
 
-.block-pdcode { word-break: break-all; font-weight: bold; color: var(--primary-color); font-size: clamp(1rem, 5.5vw, 2.5rem); font-family: 'Courier New', Courier, monospace; }
-.block-pdcode.large { font-size: clamp(2rem, 5.5vw, 3rem); margin-bottom: 0.8rem; }
-.camera-block.status-error .block-pdcode { color: var(--error-color); }
+.block-panel { word-break: break-all; font-weight: bold; color: var(--primary-color); font-size: clamp(1rem, 5.5vw, 2.5rem); font-family: 'Courier New', Courier, monospace; }
+.block-panel.large { font-size: clamp(2rem, 5.5vw, 3rem); margin-bottom: 0.8rem; }
+.camera-block.status-error .block-panel { color: var(--error-color); }
 .block-label { color: var(--label-color); font-size: clamp(1rem, 1.5vw, 1.2rem); margin-bottom: 1.2rem; }
 .status-text-success { color: var(--success-color); text-shadow: 0 0 8px rgba(41, 255, 196, 0.6); }
 .status-text-error { color: var(--error-color); text-shadow: 0 0 8px rgba(255, 27, 120, 0.6); }
@@ -912,8 +936,8 @@ html, body, #app { height: 100%; margin: 0; padding: 0; overflow: hidden; font-f
 .item-action-type { font-weight: bold; font-family: 'Courier New', Courier, monospace; font-style: italic; font-size: 0.9em; color: var(--primary-color); }
 .history-item-wrapper.is-ng-item .item-action-type { color: var(--error-color); }
 .item-timestamp { color: var(--label-color); font-size: 0.9em; }
-.item-pdcode { font-weight: bold; color: var(--primary-color); font-family: 'Courier New', Courier, monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.history-item-wrapper.is-ng-item .item-pdcode { color: var(--error-color); }
+.item-panel { font-weight: bold; color: var(--primary-color); font-family: 'Courier New', Courier, monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.history-item-wrapper.is-ng-item .item-panel { color: var(--error-color); }
 .item-status-text { font-weight: bold; font-size: 1.1em; }
 .item-status-text.status-ok { color: var(--success-color); }
 .item-status-text.status-ng { color: var(--error-color); }

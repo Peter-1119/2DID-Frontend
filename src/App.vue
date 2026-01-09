@@ -23,7 +23,10 @@
         <div class="info-grid-compact">
           <div class="info-display-group"><span class="info-label">{{ t('工號') }}：</span><span class="info-value">{{ info.employeeId || "---" }}</span></div>
           <div class="info-display-group"><span class="info-label">{{ t('姓名') }}：</span><span class="info-value">{{ info.employeeName || "---" }}</span></div>
-          <div class="info-display-group"><span class="info-label">{{ t('工單') }}：</span><span class="info-value">{{ info.workOrder || "---" }}</span></div>
+          <div class="info-display-group action-group">
+            <span class="info-label">{{ t('工單') }}：</span><span class="info-value">{{ info.workOrder || "---" }}</span>
+            <button v-if="info.workOrder" class="btn-mini-danger" @click.stop="completeAllScanned" @mousedown.prevent title="強制結單">{{ t('強制結單') }}</button>
+          </div>
           <div class="info-display-group"><span class="info-label">{{ t('品目') }}：</span><span class="info-value">{{ info.productItem || "---" }}</span></div>
         </div>
       </section>
@@ -57,6 +60,7 @@
                       </div>
                     </div>
                   </div>
+                  <div class="side-action-spacer"></div>
                 </div>
 
                 <div class="zone-row staging-row">
@@ -78,6 +82,11 @@
                         <span class="block-panel large">{{ onloadingPlatform.right?.panel || t("等待掃描...") }}</span>
                       </div>
                     </div>
+                  </div>
+                  <div class="side-action-container">
+                    <button class="btn-side-danger" @click.stop="forceExecute" @mousedown.prevent>
+                      {{ t('強制執行') }}
+                    </button>
                   </div>
                 </div>
               </div>
@@ -129,8 +138,8 @@
       <footer class="panel-footer">
         <button class="btn btn-resetuser" @click.stop="employeeClear" @mousedown.prevent>{{ t('換人生產') }}</button>
         <!-- <button class="btn btn-reset" @click.stop="resetAll">{{ t('重整') }} (Reset)</button> -->
-        <button class="btn btn-execute" @click.stop="forceExecute" @mousedown.prevent>{{ t('強制執行') }}</button>
-        <button class="btn btn-complete" @click.stop="completeAllScanned" @mousedown.prevent>{{ t('完成') }} (Complete)</button>
+        <!-- <button class="btn btn-execute" @click.stop="forceExecute" @mousedown.prevent>{{ t('強制執行') }}</button> -->
+        <button class="btn btn-complete" @click.stop="completeWorkorder" @mousedown.prevent :disabled="(info.panel_num == 0) || (info.NG_num + info.NG_num != info.panel_num)">{{ t('完成') }} (Complete)</button>
       </footer>
    </div>
   </div>
@@ -307,8 +316,8 @@ function sendSocketMessage(command, payload) {
 }
 
 // ---- wrappers ----
-const Ajax = async (url, options, time) => {
-  isLoading.value = true;
+const Ajax = async (url, options, time, backgroundLoading = true) => {
+  if (backgroundLoading) isLoading.value = true;
   loadingMessage.value = "系統處理中...";
 
   const controller = new AbortController();
@@ -376,7 +385,7 @@ function startBackendHeartbeat() {
       const controller = new AbortController();
       setTimeout(() => controller.abort(), 500); // 0.5s timeout
       console.log("send heatbeat...");
-      const res = await Ajax(`${OIS_API_BASE}/heartbeat`, { method: 'GET', signal: controller.signal });
+      const res = await Ajax(`${OIS_API_BASE}/heartbeat`, { method: 'GET', signal: controller.signal }, false);
       console.log("res: ", res);
 
       if (res) {
@@ -832,6 +841,12 @@ const completeAllScanned = async () => {
   resetAll();
 }
 
+const completeWorkorder = async () => {
+  await Ajax(`${OIS_API_BASE}/api/Delete_2DID`, { method: "POST", headers, body: JSON.stringify({ workorder: info.workOrder }) }, 1500);
+  showCustomModal(t("作業已完成！"));
+  resetAll();
+}
+
 // --- Window Control Function --- //
 onMounted(async () => {
   loadingMessage.value = "正在與後台建立連線，請稍後...";
@@ -844,7 +859,7 @@ onUnmounted(() => {
 </script>
 
 <style>
-/* 基礎樣式 */
+/* ... (Previous styles remain the same) ... */
 html, body, #app { height: 100%; margin: 0; padding: 0; overflow: hidden; font-family: "Microsoft JhengHei", sans-serif; }
 :root { --bg-color: #0f0c29; --panel-bg: rgba(21, 22, 46, 0.6); --panel-border: rgba(41, 255, 196, 0.3); --glow-color: rgba(41, 255, 196, 0.4); --text-color: #a9a9d4; --primary-color: #29ffc4; --success-color: #29ffc4; --error-color: #ff1b78; --label-color: #a9a9d4; --waiting-color: #6c757d; }
 .scan-system-container { width: 100%; height: 100%; background: linear-gradient(to right, #24243e, #302b63, #0f0c29); color: var(--text-color); }
@@ -856,53 +871,34 @@ html, body, #app { height: 100%; margin: 0; padding: 0; overflow: hidden; font-f
 .header-left, .header-right { display: flex; align-items: center; gap: 1rem; }
 .lang-select { padding: 5px; border-radius: 4px; background: rgba(0,0,0,0); color: var(--text-color); border: 1px solid var(--panel-border); font-size: 1rem; }
 
+/* ... (Zone and platform styles) ... */
 .zone-row { display: flex; align-items: center; gap: 1.5rem; width: 100%; margin-bottom: 2vh; }
 .platform-indicator-container { width: 70px; flex-shrink: 0; display: flex; justify-content: center; align-items: center; }
 .platform-indicator-container .process-zone { height: 30px; }
-
-/* 越南文優化樣式：使用 Flex column 解決長文字跑版 */
-.platform-label {
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    text-align: center;
-    font-size: 1.2rem;
-    font-weight: bold;
-    padding: 10px 5px;
-    border-radius: 8px;
-    color: #000;
-    box-shadow: 0 0 10px rgba(0,0,0,0.5);
-    letter-spacing: 1px;
-    min-height: 140px;
-    width: 100%;
-    transition: all 0.5s ease;
-    background: rgba(255, 255, 255, 0.1);
-    color: var(--text-color);
-    border: 1px solid var(--panel-border);
-    white-space: pre-wrap;
-    word-break: break-word;
-    line-height: 1.2;
-}
-
+.platform-label { display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; font-size: 1.2rem; font-weight: bold; padding: 10px 5px; border-radius: 8px; color: #000; box-shadow: 0 0 10px rgba(0,0,0,0.5); letter-spacing: 1px; min-height: 140px; width: 100%; transition: all 0.5s ease; background: rgba(255, 255, 255, 0.1); color: var(--text-color); border: 1px solid var(--panel-border); white-space: pre-wrap; word-break: break-word; line-height: 1.2; }
 .platform-upper { background-color: #FFD700 !important; box-shadow: 0 0 15px #FFD700; color: #000 !important; border: none; }
 .platform-lower { background-color: #00BFFF !important; box-shadow: 0 0 15px #00BFFF; color: #000 !important; border: none; }
-.zone-container { flex-grow: 1; position: relative; border: 1px solid var(--panel-border); border-radius: 12px; padding: 2vh 1.5rem 1.5vh 1.5rem; box-sizing: border-box; }
+.zone-container { width: 1500px; position: relative; border: 1px solid var(--panel-border); border-radius: 12px; padding: 2vh 1.5rem 1.5vh 1.5rem; box-sizing: border-box; }
 .staging-row { margin-top: 1vh; }
 
+/* [New] Spacer for layout balance */
+.side-action-spacer { width: 80px; flex-shrink: 0; }
+/* [New] Container for the side action button (Force Execute) */
+.side-action-container { width: 80px; flex-shrink: 0; display: flex; justify-content: center; align-items: center; }
+
+/* ... (Info display styles) ... */
 .info-display-section-compact { padding-top: 1.5vh; padding-bottom: 1vh; }
 .panel-footer { padding-top: 1.5vh; border-top: 1px solid var(--panel-border); display: flex; justify-content: flex-end; gap: 1rem; }
 .info-grid-compact { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; }
 .info-label { font-size: 1.2rem; margin-bottom: 0.3rem; color: var(--label-color); }
 .info-value { font-size: 1.8rem; font-weight: bold; color: var(--primary-color); padding: 0.4rem 0.75rem; background: rgba(0, 0, 0, 0.2); border-radius: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
+/* ... (Toggle button and sheet count) ... */
 .toggle-button-wrapper { flex-shrink: 0; padding: 1.5vh 0; display: flex; justify-content: space-between; align-items: center; gap: 2rem; }
 .sheet-count-display { display: flex; align-items: center; gap: 0.8rem; }
 .sheet-count-display .info-value { padding: 0; background: none; }
 
-.btn-toggle { background: rgba(140, 100, 255, 0.7); color: var(--text-color); border: 1px solid var(--panel-border); backdrop-filter: blur(5px); }
-.btn-toggle:hover { background: rgba(160, 120, 255, 0.9); color: #fff; }
-
+/* ... (Main content layout) ... */
 .camera-section-main.adaptive-view { flex-grow: 1; min-height: 0; display: flex; justify-content: center; align-items: center; overflow: hidden; }
 .main-content-wrapper { display: flex; flex-direction: column; gap: 1.5vh; width: 100%; max-width: 1400px; }
 .perspective-container { perspective: 1500px; }
@@ -913,11 +909,11 @@ html, body, #app { height: 100%; margin: 0; padding: 0; overflow: hidden; font-f
 .staging-mode-indicator.unloading { background-color: #9b59b6; color: #fff; }
 .zone-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; }
 
+/* ... (Camera blocks and status) ... */
 .camera-block { background: rgba(0, 0, 0, 0.3); border: 2px solid var(--panel-border); border-radius: 12px; display: flex; flex-direction: column; align-items: center; justify-content: center; transition: all 0.4s ease; padding: 1vh 1rem; }
 .camera-block.staging { border-width: 4px; height: auto; min-height: 20vh; padding: 2vh 2rem; overflow-y: auto; }
 .camera-block.status-success { border-color: var(--success-color); box-shadow: 0 0 10px var(--success-color); }
 .camera-block.status-error { border-color: var(--error-color); box-shadow: 0 0 10px var(--error-color); }
-
 .block-panel { word-break: break-all; font-weight: bold; color: var(--primary-color); font-size: clamp(1rem, 5.5vw, 2.5rem); font-family: 'Courier New', Courier, monospace; }
 .block-panel.large { font-size: clamp(2rem, 5.5vw, 3rem); margin-bottom: 0.8rem; }
 .camera-block.status-error .block-panel { color: var(--error-color); }
@@ -925,10 +921,10 @@ html, body, #app { height: 100%; margin: 0; padding: 0; overflow: hidden; font-f
 .status-text-success { color: var(--success-color); text-shadow: 0 0 8px rgba(41, 255, 196, 0.6); }
 .status-text-error { color: var(--error-color); text-shadow: 0 0 8px rgba(255, 27, 120, 0.6); }
 
+/* ... (Status display area and lists) ... */
 .status-display-area { flex-shrink: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; box-sizing: border-box; align-items: start; margin-top: 1vh; }
 .status-list-column { background: rgba(0, 0, 0, 0.2); border: 1px solid var(--panel-border); border-radius: 8px; padding: 0.5vh; height: 15vh; display: flex; flex-direction: column; overflow-y: auto; }
 .status-list { width: 100%; }
-
 .history-item-wrapper { border-bottom: 1px solid rgba(41, 255, 196, 0.1); padding: 0.8vh 1rem; transition: background-color 0.3s; }
 .history-item-wrapper:last-child { border-bottom: none; }
 .history-item-wrapper.is-ng-item { background-color: rgba(255, 27, 120, 0.15); border-color: rgba(255, 27, 120, 0.2); }
@@ -944,21 +940,30 @@ html, body, #app { height: 100%; margin: 0; padding: 0; overflow: hidden; font-f
 .list-item-ng-details { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem 1rem; padding-top: 0.5rem; padding-left: 1rem; font-size: 0.85rem; color: var(--label-color); }
 .list-item-ng-details span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
+/* ... (System status, buttons, modal, loading) ... */
 .initial-prompt { display: flex; justify-content: center; align-items: center; flex-direction: column; gap: 1.5rem; width: 100%; height: 100%; font-size: 1.8rem; color: var(--waiting-color); }
-.prompt-icon { width: 60px; height: 60px; fill: currentColor; }
 .system-status { display: flex; align-items: center; gap: 0.5rem; color: var(--success-color); }
 .system-status.is-offline { color: var(--error-color); animation: pulse-offline 2s infinite; }
-.status-light { width: 10px; height: 10px; background-color: var(--success-color); border-radius: 50%; }
-.status-light { width: 10px;  height: 10px;  background-color: var(--success-color);  border-radius: 50%; box-shadow: 0 0 5px var(--success-color); transition: all 0.3s ease; }
+.status-light { width: 10px; height: 10px; background-color: var(--success-color); border-radius: 50%; box-shadow: 0 0 5px var(--success-color); transition: all 0.3s ease; }
 .status-light.light-offline { background-color: var(--error-color); box-shadow: 0 0 8px var(--error-color); }
 @keyframes pulse-offline { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+
 .btn { padding: 0.7rem 1.8rem; font-size: 1rem; border-radius: 8px; cursor: pointer; border: none; transition: all 0.2s ease; font-weight: bold; }
 .btn-resetuser, .btn-reset { background: transparent; color: var(--text-color); border: 2px solid var(--panel-border); }
 .btn-resetuser:hover, .btn-reset:hover { background-color: rgba(255,255,255,0.1); }
 .btn-complete { background: var(--primary-color); color: #000; }
 .btn-complete:hover { box-shadow: 0 0 10px var(--primary-color); }
-.btn:disabled { background: var(--waiting-color); color: #333; cursor: not-allowed; opacity: 0.6; }
+.btn:disabled { background: var(--waiting-color); color: #333; cursor: not-allowed; opacity: 0.6; box-shadow: none; }
 
+/* [New] Mini danger button for top panel */
+.btn-mini-danger { background-color: var(--error-color); color: white; border: none; padding: 5px 10px; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 0.9rem; transition: background-color 0.2s; white-space: nowrap; }
+.btn-mini-danger:hover { background-color: #d01662; box-shadow: 0 0 5px var(--error-color); }
+
+/* [New] Side danger button style */
+.btn-side-danger { width: 100%; height: 100%; min-height: 140px; border-radius: 8px; font-weight: bold; font-size: 1.2rem; background-color: rgba(255, 27, 120, 0.2); border: 2px solid var(--error-color); color: var(--error-color); cursor: pointer; transition: all 0.3s ease; white-space: pre-wrap; display: flex; align-items: center; justify-content: center; text-align: center; }
+.btn-side-danger:hover { background-color: var(--error-color); color: white; box-shadow: 0 0 15px var(--error-color); }
+
+/* ... (Modal and Loading styles) ... */
 .window-wrapper { position: fixed; display: flex; justify-content: center; align-items: center; top: 0; left: 0; width: 100%; height: 100%; z-index: 1001; background-color: rgba(0, 0, 0, 0.7); }
 .custom-modal { border: 1px solid var(--panel-border); background: var(--panel-bg); box-shadow: 0 0 40px var(--glow-color); backdrop-filter: blur(15px); color: var(--text-color); border-radius: 12px; padding: 2.5rem 3.5rem; width: clamp(300px, 60vw, 700px); max-width: 90%; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 1000; }
 .custom-modal::backdrop { background: rgba(0, 0, 0, 0.7); backdrop-filter: blur(8px); }
@@ -967,28 +972,35 @@ html, body, #app { height: 100%; margin: 0; padding: 0; overflow: hidden; font-f
 .modal-actions { display: flex; gap: 1.5rem; justify-content: center; width: 100%; }
 .btn-modal-confirm { background: var(--primary-color); color: #000; padding: 0.9rem 2.5rem; font-size: clamp(1.1rem, 2vw, 1.4rem); min-width: 120px; }
 .btn-modal-confirm:hover { box-shadow: 0 0 15px var(--primary-color); }
-.btn-modal-cancel { background: transparent; color: var(--text-color); border: 2px solid var(--panel-border); padding: 0.9rem 2.5rem; font-size: clamp(1.1rem, 2vw, 1.4rem); min-width: 120px; }
-.btn-modal-cancel:hover { background-color: rgba(255,255,255,0.1); }
-
-.zone-row .platform-indicator-container { align-self: center; width: 80px; }
-.zone-row:first-child .platform-label { min-height: 80px; padding: 5px 5px; font-size: 1.1rem; }
-
-/* Loading Overlay Style */
-.loading-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: rgba(0, 0, 0, 0.7); /* 深色遮罩 */
-  backdrop-filter: blur(5px);      /* 模糊背景 */
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 9999; /* 確保在最上層 (但在 modal 之下或之上看需求) */
-}
+.loading-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.7); backdrop-filter: blur(5px); display: flex; justify-content: center; align-items: center; z-index: 9999; }
 .loading-content { display: flex; flex-direction: column; align-items: center; gap: 1.5rem; background: rgba(21, 22, 46, 0.9); padding: 2rem 3rem; border-radius: 12px; border: 1px solid var(--primary-color); box-shadow: 0 0 20px rgba(41, 255, 196, 0.3); }
 .loading-content p { color: var(--primary-color); font-size: 1.5rem; font-weight: bold; margin: 0; }
 .spinner { width: 50px; height: 50px; border: 5px solid rgba(41, 255, 196, 0.3); border-top: 5px solid var(--primary-color); border-radius: 50%; animation: spin 1s linear infinite; }
 @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+/* Fix platform label height in top row */
+.zone-row .platform-indicator-container { align-self: center; width: 80px; }
+.zone-row:first-child .platform-label { min-height: 80px; padding: 5px 5px; font-size: 1.1rem; }
+
+/* [新增] 讓工單與按鈕排成一列並垂直置中 */
+.info-display-group.action-group { display: flex; align-items: center; gap: 0.8rem; }
+
+/* [修改] 優化上方小按鈕樣式，讓它跟旁邊的大字體比較搭 */
+.btn-mini-danger {
+  background-color: var(--error-color);
+  color: white;
+  border: none;
+  /* 增加高度與 Padding，讓按鈕看起來不會太「縮」 */
+  padding: 0.4rem 1.2rem; 
+  font-size: 1.1rem; /* 字體加大 */
+  border-radius: 6px;
+  font-weight: bold;
+  cursor: pointer;
+  white-space: nowrap;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.3); /* 加一點陰影更有質感 */
+  transform: translateY(2px); /* 微調垂直位置，視情況增減 */
+  transition: all 0.2s ease;
+}
+
+.btn-mini-danger:hover { background-color: #d01662; box-shadow: 0 0 10px var(--error-color); transform: translateY(1px); }
 </style>

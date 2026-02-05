@@ -68,25 +68,24 @@
                     <div class="platform-label" :class="getPlatformClass(_out_platform)">{{ t(_out_platform) }}</div>
                   </div>
                   <div class="zone-container staging-zone">
-                    <h2 class="zone-title">{{ t('放料區') }}<span class="staging-mode-indicator loading">{{ t("待入料") }}</span></h2>
+                    <h2 class="zone-title">{{ t('放料區') }}<span class="staging-mode-indicator loading">{{ t("待入料") }}</span><span v-if="platformMessage.length > 0" class="stageing-platform-status">{{ platformMessage }}</span></h2>
                     <div class="zone-grid">
                       <div class="camera-block staging" :class="`status-${getAreaStatus(onloadingPlatform.left)}`">
                         <span class="block-label">{{ t('準備區-左') }}</span>
-                        <span v-if="get2DIDStatusShow(onloadingPlatform.left?.ret_type)" class="block-panel large" :class="`status-text-${getAreaStatus(onloadingPlatform.left)}`">{{ onloadingPlatform.left?.ret_type }}</span>
-                        <span class="block-panel large">{{ onloadingPlatform.left?.panel || t("等待掃描...") }}</span>
+                        <span v-if="get2DIDStatusShow(onloadingPlatform.left?.ret_type)" class="block-panel large" :class="`status-text-${getAreaStatus(onloadingPlatform.left)}`">{{ onloadingPlatform.left?.ret_type }}{{ (onloadingPlatform.left?.detail.length > 0) ? `(${t(onloadingPlatform.left?.detail)})` : "" }}</span>
+                        <span class="block-panel large">{{ t(onloadingPlatform.left?.panel || "等待掃描...") }}</span>
                       </div>
                       
                       <div class="camera-block staging" :class="`status-${getAreaStatus(onloadingPlatform.right)}`">
                         <span class="block-label">{{ t('準備區-右') }}</span>
-                        <span v-if="get2DIDStatusShow(onloadingPlatform.right?.ret_type)" class="block-panel large" :class="`status-text-${getAreaStatus(onloadingPlatform.right)}`">{{ onloadingPlatform.right?.ret_type }}</span>
-                        <span class="block-panel large">{{ onloadingPlatform.right?.panel || t("等待掃描...") }}</span>
+                        <span v-if="get2DIDStatusShow(onloadingPlatform.right?.ret_type)" class="block-panel large" :class="`status-text-${getAreaStatus(onloadingPlatform.right)}`">{{ onloadingPlatform.right?.ret_type }}{{ (onloadingPlatform.right?.detail.length > 0) ? `(${t(onloadingPlatform.right?.detail)})` : "" }}</span>
+                        <span class="block-panel large">{{ t(onloadingPlatform.right?.panel || "等待掃描...") }}</span>
                       </div>
                     </div>
                   </div>
                   <div class="side-action-container">
-                    <button class="btn-side-danger" @click.stop="forceExecute" @mousedown.prevent>
-                      {{ t('強制執行') }}
-                    </button>
+                    <button v-if="selectButtonType == 'executed'" class="btn-side-danger" :class="{ 'is-active': forceCommand.command }" @click.stop="forceExecuted" @mousedown.prevent :disabled="forceExecutedBtnStatus">{{ t('強制執行') }}</button>
+                    <button v-if="selectButtonType == 'scrapped'" class="btn-side-danger" :class="{ 'is-active': forceCommand.command }" @click.stop="forceScrapped" @mousedown.prevent>{{ t('強制報廢') }}</button>
                   </div>
                 </div>
               </div>
@@ -97,9 +96,9 @@
                 <div class="status-list">
                   <div v-for="item in side_history_2DID_list.left.slice(0, 5)" :key="`${item.panel}-${item.timestamp}`" class="history-item-wrapper" :class="{ 'is-ng-item': item.ret_type === 'NG' }">
                     <div class="list-item-top-row">
-                      <span class="item-timestamp">{{ formatTime(item.timestamp) }}</span>
+                      <span class="item-timestamp">{{ (item.exitTime) ? formatTime(item.exitTIme) : formatTime(item.entryTime) }}</span>
                       <span class="item-panel">{{ item.panel }}</span>
-                      <span class="item-action-type">({{ t(get2DIDActionType(item.panel)) }})</span> 
+                      <span class="item-action-type">({{ t((item.action === "processed") ? "出" : "進") }})</span> 
                       <span class="item-status-text" :class="item.ret_type === 'OK' ? 'status-ok' : 'status-ng'">{{ item.ret_type }}</span>
                     </div>
                     <div v-if="item.ret_type === 'NG'" class="list-item-ng-details">
@@ -115,9 +114,9 @@
                 <div class="status-list">
                   <div v-for="item in side_history_2DID_list.right.slice(0, 5)" :key="`${item.panel}-${item.timestamp}`" class="history-item-wrapper" :class="{ 'is-ng-item': item.ret_type === 'NG' }">
                     <div class="list-item-top-row">
-                      <span class="item-timestamp">{{ formatTime(item.timestamp) }}</span>
+                      <span class="item-timestamp">{{ (item.exitTime) ? formatTime(item.exitTIme) : formatTime(item.entryTime) }}</span>
                       <span class="item-panel">{{ item.panel }}</span>
-                      <span class="item-action-type">({{ t(get2DIDActionType(item.panel)) }})</span> 
+                      <span class="item-action-type">({{ t((item.action === "processed") ? "出" : "進") }})</span> 
                       <span class="item-status-text" :class="item.ret_type === 'OK' ? 'status-ok' : 'status-ng'">{{ item.ret_type }}</span>
                     </div>
                     <div v-if="item.ret_type === 'NG'" class="list-item-ng-details">
@@ -136,9 +135,9 @@
         <div v-else class="initial-prompt"><img src="./components/icons/search.png" width="50px">{{ t("請刷入工號與工單以開始作業") }}</div>
       </main>
       <footer class="panel-footer">
+        <button class="btn btn-mode" :class="onlineMode ? 'online' : 'offline'" @click.stop="switchMode" @mousedown.prevent>{{ onlineMode ? t("正常模式") : t("工程模式") }}</button>
         <button class="btn btn-resetuser" @click.stop="employeeClear" @mousedown.prevent>{{ t('換人生產') }}</button>
-        <!-- <button class="btn btn-reset" @click.stop="resetAll">{{ t('重整') }} (Reset)</button> -->
-        <!-- <button class="btn btn-execute" @click.stop="forceExecute" @mousedown.prevent>{{ t('強制執行') }}</button> -->
+        <button class="btn btn-reset" @click.stop="resetAll">{{ t('重整') }} (Reset)</button>
         <button class="btn btn-complete" @click.stop="completeWorkorder" @mousedown.prevent :disabled="(info.panel_num == 0) || (info.NG_num + info.NG_num != info.panel_num)">{{ t('完成') }} (Complete)</button>
       </footer>
    </div>
@@ -149,7 +148,44 @@
       <div class="modal-content">
         <p class="modal-message">{{ modalMessage }}</p>
         <div class="modal-actions">
-          <button class="btn btn-modal-confirm" @click="Modal = false">{{ t('確定') }}</button>
+          <button v-if="isConfirmMode" class="btn btn-reset" @click="Modal = false">{{ t('取消') }}</button>
+          <button class="btn btn-modal-confirm" @click="handleModalConfirm">{{ t('確認') }}</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div v-if="isLoginModalOpen" class="window-wrapper login-modal-wrapper">
+    <div class="custom-modal login-modal">
+      <div class="modal-header"><h3>{{ t('工程模式登入') }}</h3><button class="btn-close" @click="closeLoginModal">✕</button></div>
+      
+      <div class="login-content">
+        <div class="input-section">
+          <div class="input-group" :class="{ active: activeField === 'empId' }">
+            <label>{{ t('帳號 (工號)') }}</label>
+            <input type="text" v-model="loginForm.empId" @focus="activeField = 'empId'" readonly placeholder="請點擊輸入"/>
+          </div>
+          <div class="input-group" :class="{ active: activeField === 'password' }">
+            <label>{{ t('密碼') }}</label>
+            <input type="password" v-model="loginForm.password" @focus="activeField = 'password'" readonly placeholder="請點擊輸入"/>
+          </div>
+        </div>
+
+        <div class="virtual-keyboard">
+          <div class="keyboard-row"><button v-for="n in '1234567890'" :key="n" @click="handleKeyPress(n)">{{ n }}</button></div>
+          <div class="keyboard-row"><button v-for="c in 'QWERTYUIOP'" :key="c" @click="handleKeyPress(c)">{{ isCapsLock ? c : c.toLowerCase() }}</button></div>
+          <div class="keyboard-row"><button v-for="c in 'ASDFGHJKL'" :key="c" @click="handleKeyPress(c)">{{ isCapsLock ? c : c.toLowerCase() }}</button></div>
+          <div class="keyboard-row">
+            <button class="btn-func caps-lock" :class="{ 'active': isCapsLock }" @click="toggleCapsLock">Caps</button>
+            <button v-for="c in 'ZXCVBNM'" :key="c" @click="handleKeyPress(c)">{{ isCapsLock ? c : c.toLowerCase() }}</button>
+            <button class="btn-func btn-backspace" @click="handleBackspace">⌫</button>
+          </div>
+          <div class="keyboard-row"><button class="btn-func" style="flex: 1;" @click="handleClear">{{ t('清空') }}</button></div>
+        </div>
+
+        <div class="modal-actions login-actions">
+          <button class="btn btn-reset" @click="closeLoginModal">{{ t('取消') }}</button>
+          <button class="btn btn-modal-confirm" @click="handleAdminLogin">{{ t('登入') }}</button>
         </div>
       </div>
     </div>
@@ -165,8 +201,8 @@
 
 <script setup>
 import { ref, onMounted, onUnmounted, computed, watch, reactive } from 'vue';
-import { i18nDict } from "@/textManager/translate"
-import logo from "@/components/icons/flexium_logo.png"
+import { i18nDict } from "@/textManager/translate";
+import logo from "@/components/icons/flexium_logo.png";
 
 const OIS_API_BASE = "http://10.8.32.64:2151";
 const wsUrl = 'ws://127.0.0.1:8181'
@@ -184,14 +220,22 @@ const isLoading = ref(false);
 const loadingMessage = ref("系統處理中..."); // 可動態改變文字
 
 // Process stage
+const onlineMode = ref(true);
+const isLoginModalOpen = ref(false);
+const activeField = ref('empId');
+const isCapsLock = ref(false); // ✅ [新增] 大小寫狀態
+const loginForm = reactive({ empId: '', password: '' });
+let PLCEnabledTimer = null;
+
 const stage = ref("empId");
-const forceCommand = reactive({command: false, triggerTime: null});
+const forceCommand = reactive({command: false, triggerTime: null, platformStatus: null});
+const platformMessage = ref("");
+let forceTimer = null;
 const unloadPeriodThreshold = 10000;
 const shortPeriodFilterThreshold = 5000;
-const forceTriggerPeriod = 10000;
 
 // PLC state
-const PlatformState = reactive({ up_in: -1, dn_in: -1, start_message: -1 });
+const PlatformState = reactive({ up_in: -1, up_out: -1, dn_in: -1, dn_out: -1, start_message: -1 });
 
 // Other data
 let info = reactive({
@@ -216,7 +260,9 @@ let side_history_2DID_list = reactive({left: [], right: []});  // List all histo
 let history_2DID_dict = reactive({});  // Save all history scanned 2DID dict
 let up_platform_2DID = reactive({right: emptySlot(), left: emptySlot()});
 let dn_platform_2DID = reactive({right: emptySlot(), left: emptySlot()});
-let last_OK_upload_2DID = reactive({up: {left: {panel: "", detect: false}, right: {panel: "", detect: false}}, dn: {left: {panel: "", detect: false}, right: {panel: "", detect: false}}});
+let processed_2DID = reactive({});
+let last_process_2DID = reactive({up: {left: {panel: "", detect: false}, right: {panel: "", detect: false}}, dn: {left: {panel: "", detect: false}, right: {panel: "", detect: false}}});
+let last_camera_result = reactive({ left: { value: "", entryTime: -1 }, right: { value: "", entryTime: -1 } })
 
 // --- Offline & Failover State --- //
 const isBackendOnline = ref(false);
@@ -235,7 +281,6 @@ const getPlatformClass = (text) => {
 };
 const inProcessPlatform = computed(() => { return (PlatformState.up_in == 1) ? up_platform_2DID : dn_platform_2DID; })
 const onloadingPlatform = computed(() => { return (PlatformState.up_in != 1) ? up_platform_2DID : dn_platform_2DID; })
-const get2DIDActionType = (panel) => (scanned_2DID_dict[panel] && scanned_2DID_dict[panel].ret_type == "OK") ? "出" : "進";
 const getAreaStatus = (area) => {
   const rt = area?.ret_type || "";
   if (rt === "OK") return "success";
@@ -243,6 +288,19 @@ const getAreaStatus = (area) => {
   return "waiting";
 };
 const get2DIDStatusShow = (status) => { return (status && status.length > 0) ? true : false; };
+const forceExecutedBtnStatus = computed(() => {
+  let targetPlatform = detectTargetPlatform();
+  if (targetPlatform == null) return false;
+  if ((info.OK_num + info.NG_num) == info.panel_num || (((info.OK_num + info.NG_num) == info.panel_num - 1) && targetPlatform.left.ret_type === "OK" && targetPlatform.right.ret_type === "OK")) return true;
+  if (targetPlatform.left.ret_type === "OK" && targetPlatform.right.ret_type === "OK") return true;
+  if (targetPlatform.left.ret_type === "NG" || targetPlatform.right.ret_type === "NG") return true;
+  if (targetPlatform.left.ret_type === "OK" || targetPlatform.right.ret_type === "OK") return false;
+  return true;
+})
+const selectButtonType = computed(() => {
+  let targetLastProcess2DIDPlatform = (PlatformState.up_out == 1) ? last_process_2DID.up : last_process_2DID.dn;
+  return (targetLastProcess2DIDPlatform.left.panel != "" || targetLastProcess2DIDPlatform.right.panel != "") ? "scrapped" : "executed";
+})
 
 // --- Websocket Process --- ///
 let reconnectDelay = 5000; // <--- 補上這行
@@ -267,19 +325,8 @@ function connectWebSocket() {
     try {
       const message = JSON.parse(event.data);
       if (message.type === "data") {
-        // Process PLC state
-        if (message.source === "PLC_MONITOR") {
-          const p = message.payload;
-          PlatformState.up_in = p.up_in;
-          PlatformState.dn_in = p.dn_in;
-          PlatformState.start_message = p.start_message;
-        }
-        // Process infomation input from keyboard
-        else if (message.source === "SCANNER") { handleInfoInput(message.payload); }
-        // Process camera input
-        else if (message.source.includes("CAMERA")) { processControl(message.payload, message.source); }
         // Receive offline API command
-        else if (message.source === "SYS" && message.payload && message.payload.type === "OFFLINE_CACHE_LOADED") {
+        if (message.source === "SYS" && message.payload && message.payload.type === "OFFLINE_CACHE_LOADED") {
           console.log("Process OFFLINE_CACHE_LOADED");
           const loadedData = message.payload.data;
           if (Array.isArray(loadedData) && loadedData.length > 0) {
@@ -287,6 +334,12 @@ function connectWebSocket() {
             startBackendHeartbeat();
           }
         }
+        // Process PLC state
+        else if (message.source === "PLC_MONITOR") { Object.assign(PlatformState, { ...message.payload }); }
+        // Process infomation input from keyboard
+        else if (message.source === "SCANNER") { handleInfoInput(message.payload); }
+        // Process camera input
+        else if (message.source.includes("CAMERA")) { processControl(message.payload, message.source); }
       }
     }
     catch (error) { console.error("WebSocket 解析訊息失敗: ", error); }
@@ -295,11 +348,7 @@ function connectWebSocket() {
   socket.onclose = () => {
     console.log(`WebSocket: 連接已關閉，${reconnectDelay / 1000}秒後嘗試重連...`);
     socket = null;
-
-    // 清空狀態
-    PlatformState.up_in = -1;
-    PlatformState.dn_in = -1;
-    PlatformState.start_message = -1;
+    Object.assign(PlatformState, { up_in: -1, up_out: -1, dn_in: -1, dn_out: -1, start_message: -1 });
 
     if (reconnectTimer) clearTimeout(reconnectTimer);
     reconnectTimer = setTimeout(() => { connectWebSocket(); }, reconnectDelay);
@@ -373,6 +422,11 @@ const Ajax = async (url, options, time, backgroundLoading = true) => {
   }
   finally { isLoading.value = false; }
 }
+const formatToStringTime = (timestamp) => {
+  const date = new Date(timestamp);
+  const offsetDate = new Date(date.getTime() + 8 * 60 * 60 * 1000);
+  return offsetDate.toISOString().replace(/T/, ' ').replace(/\..+/, '');
+};
 
 // --- Heartbeat & Recovery Logic --- //
 function startBackendHeartbeat() {
@@ -437,9 +491,55 @@ async function processOfflineQueue() {
 // --- Custom Modal --- //
 const Modal = ref(false);
 const modalMessage = ref('');
+const isConfirmMode = ref(false);
+let onConfirmCallback = null;
 const showCustomModal = (message) => {
   modalMessage.value = message;
   Modal.value = true;
+};
+const showConfirmModal = (message, callback) => {
+  modalMessage.value = message;
+  isConfirmMode.value = true;
+  onConfirmCallback = callback;
+  Modal.value = true;
+};
+const handleModalConfirm = () => {
+  if (isConfirmMode.value && onConfirmCallback) onConfirmCallback();
+  Modal.value = false;
+};
+
+// 開啟登入視窗 (取代原本 switchMode 的邏輯)
+const openLoginModal = () => {
+  loginForm.empId = '';
+  loginForm.password = '';
+  activeField.value = 'empId'; // 預設聚焦在帳號
+  isLoginModalOpen.value = true;
+};
+
+const closeLoginModal = () => {
+  isLoginModalOpen.value = false;
+};
+
+// 鍵盤輸入處理
+const handleKeyPress = (char) => {
+  if (activeField.value) {
+    let inputChar = char;
+    if (/[a-zA-Z]/.test(char)) inputChar = isCapsLock.value ? char.toUpperCase() : char.toLowerCase();
+    loginForm[activeField.value] += inputChar;
+  }
+};
+const toggleCapsLock = () => { isCapsLock.value = !isCapsLock.value; };
+
+const handleBackspace = () => {
+  if (activeField.value && loginForm[activeField.value].length > 0) {
+    loginForm[activeField.value] = loginForm[activeField.value].slice(0, -1);
+  }
+};
+
+const handleClear = () => {
+  if (activeField.value) {
+    loginForm[activeField.value] = '';
+  }
 };
 
 // --- API Request --- //
@@ -488,16 +588,16 @@ async function validate2DID(panel_id) {
   const panel_info = expected_2DID_dict[panel_id];
   if (panel_info) {
     if (panel_info.twodid_type == "Y") {
-      await sheetReport(panel_id, "NG", "跳站");
+      await sheetReport(panel_id, "NG", "跳站", formatToStringTime(Date.now()), formatToStringTime(Date.now()));
       return { ret_type: "NG", workOrder: info.workOrder, item: info.productItem, detail: "跳站" };
     }
     else if (panel_info.twodid_step === info.workStep) {
-      await sheetReport(panel_id, "NG", "重工", false);
+      await sheetReport(panel_id, "NG", "重工", formatToStringTime(Date.now()), formatToStringTime(Date.now()), false);
       return { ret_type: "NG", workOrder: info.workOrder, item: info.productItem, detail: "重工" };
     }
 
     const scanned_record = scanned_2DID_dict[panel_id];
-    if (scanned_record && Date.now() - scanned_record.timestamp > unloadPeriodThreshold) {
+    if (scanned_record && Date.now() - scanned_record.exitTime > unloadPeriodThreshold) {
       return { ret_type: "NG", workOrder: info.workOrder, item: info.productItem, detail: "重工" };
     }
     else if (scanned_record) {
@@ -518,8 +618,8 @@ async function validate2DID(panel_id) {
       const [res_ok, workOrder, productItem, workStep] = res_json.result.result.split(";");
 
       if (res_ok == "OK") {
-        if (productItem != info.productItem) detail += "混品目;";
-        else if (workOrder != info.workOrder) detail += "混工單;";
+        if (productItem != info.productItem) detail += "混品目";
+        else if (workOrder != info.workOrder) detail += "混工單";
 
         other_2DID_dict[twodid] = { ret_type: "NG", workStepName: workStep, workOrder: workOrder, item: productItem, detail: (detail == "") ? "異常錯誤" : detail };
 
@@ -534,6 +634,17 @@ async function validate2DID(panel_id) {
   catch (error) { showCustomModal(t("驗證2DID發生錯誤，請確認網路連線")); }
 
   return { ret_type: "NG", workOrder: "查無工單", item: "查無品目", detail: "異常錯誤" };
+}
+
+async function validateAdmin(empId) {
+  try {
+    const res = await Ajax(`${OIS_API_BASE}/api/admin_login`, { method: "POST", headers, body: JSON.stringify({ empId }) }, 1500);
+    return res.success;
+  } catch (error) {
+    console.error("Admin login error:", error);
+    showCustomModal(t("驗證失敗，請確認網路連線"));
+    return false;
+  }
 }
 
 // --- Control Process --- //
@@ -554,13 +665,16 @@ function resetAll() {
   clearObj(history_2DID_dict);
   clearObj(side_history_2DID_dict.left);
   clearObj(side_history_2DID_dict.right);
+  clearObj(processed_2DID);
 
   side_history_2DID_list.left.length = 0;
   side_history_2DID_list.right.length = 0;
+  const empty_process_2DID = { panel: "", detect: false };
   Object.assign(up_platform_2DID, {right: emptySlot(), left: emptySlot()});
   Object.assign(dn_platform_2DID, {right: emptySlot(), left: emptySlot()});
   Object.assign(info, { employeeId: "", employeeName: "", workOrder: "", productItem: "", workStep: "", panel_num: 0, OK_num: 0, NG_num: 0, cmd236_flag: false });
   Object.assign(forceCommand, { command: false, triggerTime: null });
+  Object.assign(last_process_2DID, {up: { left: { ...empty_process_2DID }, right: { ...empty_process_2DID } }, dn: { left: { ...empty_process_2DID }, right: { ...empty_process_2DID } } });
 
   changeStage("empId");
 }
@@ -590,7 +704,7 @@ function create2DIDDict(panelList) {
   if (Array.isArray(panelList.scanned_data) && panelList.scanned_data.length > 0) {
     for (const sd of panelList.scanned_data) {
       if (!scanned_2DID_dict[sd.panel_no]){
-        scanned_2DID_dict[sd.panel_no] = { timestamp: sd.timestamp, ret_type: sd.twodid_type, workOrder: info.workOrder, item: info.productItem, detail: sd.twodid_status };
+        scanned_2DID_dict[sd.panel_no] = { exitTime: sd.timestamp, ret_type: sd.twodid_type, workOrder: info.workOrder, item: info.productItem, detail: sd.twodid_status };
         if (sd.twodid_type === 'OK') info.OK_num += 1;
         else if (sd.twodid_type === 'NG') info.NG_num += 1;
       }
@@ -601,8 +715,14 @@ function create2DIDDict(panelList) {
 // Handle employee login and check work order valid
 const handleInfoInput = async (data) => {
   const value = String(data).replace(/[\x00-\x1F\x7F-\x9F]/g, "").trim().toUpperCase();
-
   if (!value) return;
+
+  if (isLoginModalOpen.value) {
+    loginForm[activeField.value] = value;
+    if (activeField.value === 'empId') activeField.value = 'password'; // 帳號輸入完 -> 跳到密碼
+    else if (activeField.value === 'password')  handleAdminLogin(); // 密碼輸入完 -> 直接登入
+    return; // 阻擋訊號進入原本的工單流程
+  }
 
   if (stage.value === "empId") {
     const result = await validateEmpId(value);
@@ -610,8 +730,7 @@ const handleInfoInput = async (data) => {
 
     if (!result) return;
 
-    info.employeeId = result.empNo;
-    info.employeeName = result.empName;
+    Object.assign(info, { employeeId: result.empNo, employeeName: result.empName})
     changeStage((info.workOrder === "") ? "workOrder" : "twoDID");
   }
 
@@ -624,12 +743,7 @@ const handleInfoInput = async (data) => {
     const valid = await validateWorkOrder(value, true);
     console.log("workorder: ", valid);
     if (valid && valid.workStep !== ""){
-      info.workOrder = valid.workorder;
-      info.productItem = valid.item;
-      info.workStep = valid.workStep;
-      info.panel_num = valid.panel_num;
-      info.OK_num = 0;
-      info.NG_num = 0;
+      Object.assign(info, { workOrder: valid.workorder, productItem: valid.item, workStep: valid.workStep, panel_num: valid.panel_num, OK_num: 0, NG_num: 0 });
       create2DIDDict(valid);
       changeStage("twoDID");
     }
@@ -638,17 +752,22 @@ const handleInfoInput = async (data) => {
 
 // Check platform at loading area
 function detectTargetPlatform() { return (PlatformState.up_in != 1) ? up_platform_2DID : dn_platform_2DID; }
-function detectOtherPlatform() { return (PlatformState.up_in == 1) ? up_platform_2DID : dn_platform_2DID; }
 
 // Process 2DID control
 const processControl = async (data, source) => {
-  // 1. Check value valid
-  // 2. Get loading platform
-  // 3. Process 2DID TIMEOUT signal
-  // 4. Get product 2DID information
-  // 5. Record 2DID information to history dictionary
-  // 6. Refresh target platform product information
-  // 7. Send M86, M87 status to local python
+  // 1.  如果不是在 twoDID stage 或是 PLC 狀態上下檯面其中 進/出都為 0 狀態，則不處理向機訊號 (都為 0 代表檯面目前正在移動)
+  // 2.  訊號長度不為 13 碼，則跳過
+  // 3.  查找目前正在上料區的檯面
+  // 4.  判斷上一次作業的 2DID 是否已完成作業 (否) => 阻擋訊號傳入，並提示人員"須進行 2DID 重掃或報廢"
+  // 5.  若目前訊號為 timeout 則清空狀態，並結束 function 以及判斷是否該註銷 force 訊號，否則繼續下面動作
+  // 6.  對目前掃描到的 2DID 進行驗證，並輸出該製品訊息
+  // 7.  若該工單母前達到綁定上限，則不允許繼續綁定
+  // 8.  將 2DID 紀錄於變數進行狀態暫存
+  // 9.  判斷強制作業訊號是否維持
+  // 10. 判斷是否輸出訊號通知 PLC 使人員可繼續後續的台面作業
+  if (stage.value != "twoDID") return;
+  if ((PlatformState.up_in === 0 && PlatformState.up_out === 0) || (PlatformState.dn_in === 0 && PlatformState.dn_out === 0)) return;
+
   const value = (twodid_panel_mapping[data]) ? twodid_panel_mapping[data] : data;
   if (value.length !== 13) {
     showCustomModal(t("產品條碼長度不正確，請重新掃描。"));
@@ -659,117 +778,124 @@ const processControl = async (data, source) => {
   let targetPlatform = detectTargetPlatform();
   if (targetPlatform == null) return null;
   let targetPlatformArea = source.startsWith("CAMERA_LEFT") ? targetPlatform.left : targetPlatform.right;
-  let otherPlatformArea = source.startsWith("CAMERA_LEFT") ? detectOtherPlatform().left : detectOtherPlatform().right;
+  let targetLastProcess2DIDPlatform = (PlatformState.up_out == 1) ? last_process_2DID.up : last_process_2DID.dn;
+  let last_area_camera_result = source.startsWith("CAMERA_LEFT") ? last_camera_result.left : last_camera_result.right;
+
+  // Remove last processed 2DID and block work flow
+  let targetLastProcess2DIDPlatformArea = source.startsWith("CAMERA_LEFT") ? targetLastProcess2DIDPlatform.left : targetLastProcess2DIDPlatform.right;
+  console.log('targetLastProcess2DIDPlatform: ', targetLastProcess2DIDPlatform);
+  if (targetLastProcess2DIDPlatformArea.panel == value) {
+    const finishedRec = { exitTime: Date.now(), ret_type: "OK", workOrder: info.workOrder, item: info.productItem, detail: "OK (重刷)", action: "processed", workStepName: info.workStep };
+    let area_history_2DID_dict = (source.startsWith("CAMERA_LEFT")) ? side_history_2DID_dict.left[value] : side_history_2DID_dict.right[value];
+    Object.assign(area_history_2DID_dict, { ...finishedRec });
+
+    let area_history_2DID_list = (source.startsWith("CAMERA_LEFT")) ? side_history_2DID_list.left : side_history_2DID_list.right;
+    area_history_2DID_list.unshift({ ...finishedRec, panel: value });
+
+    await sheetReport(value, "OK", "OK", formatToStringTime(history_2DID_dict[value].entryTime), formatToStringTime(Date.now()));
+    scanned_2DID_dict[value] = { exitTime: Date.now(), ret_type: "OK", workOrder: info.workOrder, item: info.productItem, detail: "OK"};
+    Object.assign(targetLastProcess2DIDPlatformArea, { panel: "", detect: false });
+    Object.assign(targetPlatformArea, { panel: "等待掃描...", ret_type: "", detail: "" });
+    platformMessage.value = "";
+    return;
+  }
+  else if (!onlineMode.value || targetLastProcess2DIDPlatform.left.panel != "" || targetLastProcess2DIDPlatform.right.panel != "") return;
 
   // Receive camera timeout signal
   if (value == "TIMEOUT_BLANK") {
-    const lastArea2DID = source.startsWith("CAMERA_LEFT") ? side_history_2DID_list.left[0] : side_history_2DID_list.right[0];
-    if (!lastArea2DID || Date.now() - lastArea2DID.timestamp > 1500) Object.assign(targetPlatformArea, { panel: "等待掃描...", ret_type: "", detail: "" });
-
-    // Detect force information
-    if (forceCommand.command === true && (forceCommand.triggerTime && Date.now() - forceCommand.triggerTime < forceTriggerPeriod) && (targetPlatform.left.ret_type === "OK" || targetPlatform.right.ret_type === "OK")) {
-      sendSocketMessage("GO_NOGO", 1);
-    }
-    else sendSocketMessage("GO_NOGO", 0);
+    if ((Date.now() - last_area_camera_result.entryTime) < 1500) return;
+    Object.assign(targetPlatformArea, { panel: "等待掃描...", ret_type: "", detail: "" });
+    if (forceCommand.command == true && (targetPlatform.left.panel != forceCommand.platformStatus.left && targetPlatform.right.panel != forceCommand.platformStatus.right)) cancelForceCommand();
     return;
   }
 
   // Check product validate
+  const action = (scanned_2DID_dict[value]) ? "processed" : "waiting"
   let targetPanel = (source.startsWith("CAMERA_RIGHT") || source.startsWith("CAMERA_LEFT")) ? value : null;
   let validResult = await validate2DID(targetPanel);
-  let rec = { timestamp: Date.now(), workStepName: validResult.workStepName, ret_type: validResult.ret_type, workOrder: validResult.workOrder, item: validResult.item, detail: validResult.detail };
+  let rec = { entryTime: Date.now(), workStepName: validResult.workStepName, ret_type: validResult.ret_type, workOrder: validResult.workOrder, item: validResult.item, detail: validResult.detail, action };
 
+  // Block match more than total panel
   const two_camera_pass = rec.ret_type == "OK" && ((targetPlatform.left.ret_type == 'OK' && source.startsWith("CAMERA_RIGHT")) || (targetPlatform.right.ret_type && source.startsWith("CAMERA_LEFT")))
-  if (info.OK_num === info.panel_num || ((info.OK_num == info.panel_num - 1) && two_camera_pass)) {
+  if ((info.OK_num + info.NG_num) === info.panel_num || (((info.OK_num + info.NG_num) == info.panel_num - 1) && two_camera_pass)) {
     if (rec.ret_type == "OK") Object.assign(rec, { ...rec, ret_type: "NG", detail: "超過 PANEL 上限" });
     showCustomModal(t('已達 PANEL 數上限，因此無法綁定。'));
   }
 
   // Filtered short period repeated 2DID for frontend log
-  const sheet_history = (source.startsWith("CAMERA_LEFT")) ? side_history_2DID_dict.left[value] : side_history_2DID_dict.right[value];
-  const last_info = (source.startsWith("CAMERA_LEFT")) ? side_history_2DID_list.left[0] : side_history_2DID_list.right[0];
-  if (sheet_history && (last_info && (last_info.panel == value)) && (Date.now() - sheet_history.timestamp < shortPeriodFilterThreshold)) {
-    sheet_history.timestamp = Date.now();
+  const sheet_history = (source.startsWith("CAMERA_LEFT")) ? side_history_2DID_dict.left : side_history_2DID_dict.right;
+  const list_info = (source.startsWith("CAMERA_LEFT")) ? side_history_2DID_list.left : side_history_2DID_list.right;
+  if (sheet_history[value] && (list_info[0] && (list_info[0].panel == value)) && (Date.now() - sheet_history[value].entryTime < shortPeriodFilterThreshold)) {
+    sheet_history[value].entryTime = Date.now();
   }
   else {
-    if (source.startsWith("CAMERA_LEFT")) { 
-      side_history_2DID_list.left.unshift({ ...rec, panel: value });
-      side_history_2DID_dict.left[value] = { ...rec };
-    }
-    else if (source.startsWith("CAMERA_RIGHT")) {
-      side_history_2DID_list.right.unshift({ ...rec, panel: value });
-      side_history_2DID_dict.right[value] = { ...rec };
-    }
+    if (!sheet_history[value]) sheet_history[value] = { ...rec };
+    else Object.assign(sheet_history[value], { ...rec });
+    list_info.unshift({ ...rec, panel: value });
   }
 
   // Filtered short period repeated 2DID to record
-  if (history_2DID_dict[value]) history_2DID_dict[value].timestamp = Date.now();
+  if (history_2DID_dict[value]) history_2DID_dict[value].entryTime = Date.now();
   else history_2DID_dict[value] = { ...rec };
 
-  // Check 2DID is processed 2DID
-  if (value == targetPlatformArea.panel || value == otherPlatformArea.panel) {
-    const upPlatformUpload2DIDArea = (source.startsWith("CAMERA_LEFT")) ? last_OK_upload_2DID.up.left : last_OK_upload_2DID.up.right;
-    const dnPlatformUpload2DIDArea = (source.startsWith("CAMERA_RIGHT")) ? last_OK_upload_2DID.dn.left : last_OK_upload_2DID.dn.right;
-    if (value == upPlatformUpload2DIDArea.panel) upPlatformUpload2DIDArea.detect = true;
-    else if (value == dnPlatformUpload2DIDArea.panel) dnPlatformUpload2DIDArea.detect = true;
-  }
-  // Filled the information for frontend
-  else if (value != otherPlatformArea.panel) Object.assign(targetPlatformArea, { panel: value, ret_type: validResult.ret_type, detail: validResult.detail });
+  Object.assign(last_area_camera_result, { value: value, entryTime: Date.now() })
+  Object.assign(targetPlatformArea, { panel: value, ret_type: validResult.ret_type, detail: validResult.detail });
 
+  // Process force command
+  if (forceCommand.command == true && (targetPlatform.left.panel == forceCommand.platformStatus.left && targetPlatform.right.panel == forceCommand.platformStatus.right)) return;
+  else if (forceCommand.command == true) cancelForceCommand();
+  
   // Send M86, M87 command to PLC
   const oneSheetNG = targetPlatform.left.ret_type == "NG" || targetPlatform.right.ret_type == "NG";
   const lastoneSheetOK = !oneSheetNG && (targetPlatform.left.ret_type === "OK" || targetPlatform.right.ret_type === "OK");
   const CompleteSheet = targetPlatform.left.detail === "已完成" || targetPlatform.right.detail === "已完成"
-  if (!oneSheetNG && forceCommand.command === true && (forceCommand.triggerTime && Date.now() - forceCommand.triggerTime < forceTriggerPeriod) && ((targetPlatform.left.ret_type === "OK" || targetPlatform.right.ret_type === "OK") && !CompleteSheet)) {
+  if (stage.value == "twoDID" && ((targetPlatform.left.ret_type === "OK" && targetPlatform.right.ret_type === "OK" && !CompleteSheet) || ((info.OK_num == info.panel_num - 1) && lastoneSheetOK))) {
     sendSocketMessage("GO_NOGO", 1);
+    platformMessage.value = "";
+    return;
   }
-  else if (stage.value == "twoDID" && ((targetPlatform.left.ret_type === "OK" && targetPlatform.right.ret_type === "OK" && !CompleteSheet) || ((info.OK_num == info.panel_num - 1) && lastoneSheetOK))) {
-    sendSocketMessage("GO_NOGO", 1);
-  }
-  else sendSocketMessage("GO_NOGO", 0);
+  else if (oneSheetNG) platformMessage.value = "平台上出現 NG 製品，因此無法進行作業";
+  sendSocketMessage("GO_NOGO", 0);
 }
 
-watch(
-  () => [PlatformState.up_in, PlatformState.dn_in], ([up, dn], [prevUp, prevDn]) => {
-    if (up === 1 && prevUp !== 1) scanedSheetRecord(up_platform_2DID, "up");
-    if (dn === 1 && prevDn !== 1) scanedSheetRecord(dn_platform_2DID, "dn");
-    if (up !== 1 && prevUp === 1) setTimeout(() => {lastOKUploadSheetDetect("up");}, 1000);  // Delay 1 second to check 2DID
-    if (dn !== 1 && prevDn === 1) setTimeout(() => {lastOKUploadSheetDetect("dn");}, 1000);  // Delay 1 second to check 2DID
-  }
-);
+watch(() => [PlatformState.up_in, PlatformState.up_out], ([up_in, up_out], [prevUp_in, prevUp_out]) => {
+  if (prevUp_out === 1 && up_out === 0 && up_in === 0 && prevUp_in === 0) scanedSheetRecord(up_platform_2DID, "up");  // Upper platform is moving from loading area to processing area 
+  if (prevUp_out === 0 && up_out === 1 && up_in === 0 && prevUp_in === 0) setTimeout(() => { lastOKSheetDetect('up') }, 3000);  // Upper platform is moving from processing area to loading area 
+  cancelForceCommand();
+});
+
+watch(() => [PlatformState.dn_in, PlatformState.dn_out], ([dn_in, dn_out], [prevDn_in, prevDn_out]) => {
+  if (prevDn_out === 1 && dn_out === 0 && dn_in === 0 && prevDn_in === 0) scanedSheetRecord(dn_platform_2DID, "dn");  // Lower platform is moving from loading area to processing area 
+  if (prevDn_out === 0 && dn_out === 1 && dn_in === 0 && prevDn_in === 0) setTimeout(() => { lastOKSheetDetect('dn') }, 3000);  // Lower platform is moving from processing area to loading area 
+  cancelForceCommand();
+});
 
 async function scanedSheetRecord(platform, info) {
-  let targetPlatformUpload2DID = (info == "up") ? last_OK_upload_2DID.up : last_OK_upload_2DID.dn;
-  if (platform.left.ret_type == "OK" && !scanned_2DID_dict[platform.left.panel]) Object.assign(targetPlatformUpload2DID.left, {panel: platform.left.panel, detect: false});
-  if (platform.right.ret_type == "OK" && !scanned_2DID_dict[platform.right.panel]) Object.assign(targetPlatformUpload2DID.right, {panel: platform.right.panel, detect: false});
+  let last_process_2DID_area = (info == 'up') ? last_process_2DID.up : last_process_2DID.dn;
+  if (platform.left.ret_type == "OK" && !scanned_2DID_dict[platform.left.panel]) Object.assign(last_process_2DID_area.left, { panel: platform.left.panel, detect: false });
+  if (platform.right.ret_type == "OK" && !scanned_2DID_dict[platform.right.panel]) Object.assign(last_process_2DID_area.right, { panel: platform.right.panel, detect: false });
 }
 
-async function lastOKUploadSheetDetect(info) {
-  let targetPlatformUpload2DID = (info == "up") ? last_OK_upload_2DID.up : last_OK_upload_2DID.dn;
-  if ((targetPlatformUpload2DID.left.panel != "" && targetPlatformUpload2DID.left.detect == false) || (targetPlatformUpload2DID.right.panel != "" && targetPlatformUpload2DID.right.detect == false)) {
+// If 2DID is not remove from processed_2DID_dict that means processed
+async function lastOKSheetDetect(info) {
+  let last_process_2DID_area = (info == 'up') ? last_process_2DID.up : last_process_2DID.dn;
+  let targetPlatform = onloadingPlatform.value;
+  if (last_process_2DID_area.left.panel != "" || last_process_2DID_area.right.panel != "") {
     showCustomModal(t("進出料製品 2DID 不同，請確認機台是否操作正常"));
+    platformMessage.value = "請將作業完的製品掃出";
   }
-
-  if (history_2DID_dict[targetPlatformUpload2DID.left.panel]) {
-    history_2DID_dict[targetPlatformUpload2DID.left.panel].timestamp = Date.now();
-    sheetReport(targetPlatformUpload2DID.left.panel, "OK", "OK");
-  }
-  if (history_2DID_dict[targetPlatformUpload2DID.right.panel]) {
-    history_2DID_dict[targetPlatformUpload2DID.right.panel].timestamp = Date.now();
-    sheetReport(targetPlatformUpload2DID.right.panel, "OK", "OK");
-  }
-  
-  Object.assign(targetPlatformUpload2DID, {left: {panel: "", detect: false}, right: {panel: "", detect: false}});
+  if (targetPlatform.left.ret_type == "OK") Object.assign(targetPlatform.left, { ret_type: "NG", detail: "製品未掃出" });
+  if (targetPlatform.right.ret_type == "OK") Object.assign(targetPlatform.right, { ret_type: "NG", detail: "製品未掃出" });
 }
 
-const sheetReport = async(panel_no, type, detail, report = true) => {
+const sheetReport = async(panel_no, type, detail, entryTime, exitTime, report = true) => {
   if (panel_no && (panel_no.length == 0)) return;
 
   if (expected_2DID_dict[panel_no] && !scanned_2DID_dict[panel_no]) {
-    scanned_2DID_dict[panel_no] = { timestamp: Date.now(), ret_type: type, workOrder: info.workOrder, item: info.productItem, detail };
+    scanned_2DID_dict[panel_no] = { exitTime: Date.now(), ret_type: type, workOrder: info.workOrder, item: info.productItem, detail };
 
     if (report){
-      try { await uploadPanel(panel_no, type, detail);} 
+      try { await uploadPanel(panel_no, type, detail, entryTime, exitTime);} 
       catch (error) { showCustomModal(t(`製品 ${type} 狀態上傳失敗，請確認網路連線！`)); }
     }
 
@@ -777,14 +903,14 @@ const sheetReport = async(panel_no, type, detail, report = true) => {
     else if (type == "NG") info.NG_num += 1;
   }
   else if (!expected_2DID_dict[panel_no] && !other_2DID_dict[panel_no]){
-    try { await uploadPanel(panel_no, type, detail); } 
+    try { await uploadPanel(panel_no, type, detail, entryTime, exitTime); } 
     catch (error) { showCustomModal(t(`製品 ${type} 狀態上傳失敗，請確認網路連線！`)); }
   }
 }
 
-const uploadPanel = async (panel_no, ret_type, status) => {
-  const base = { emp_no: info.employeeId, workOrder: info.workOrder, workStep: info.workStep, item: info.productItem, twodid_type: ret_type, remark: `${status}-IPC` };
-  const payloads = panel_twodid_mapping[panel_no].map(sheet_no => ({ ...base, sht_no: sheet_no, panel_no }));
+const uploadPanel = async (panel_no, ret_type, status, entryTime, exitTime) => {
+  const base = { emp_no: info.employeeId, workOrder: info.workOrder, workStep: info.workStep, item: info.productItem, entryTime, exitTime, twodid_type: ret_type, remark: `${status}-IPC` };
+  const payloads = panel_twodid_mapping[panel_no]?.map(sheet_no => ({ ...base, sht_no: sheet_no, panel_no }));
   await Ajax(`${OIS_API_BASE}/api/write2dids`, { method: "POST", headers, body: JSON.stringify(payloads) }, 200);
 }
 
@@ -795,26 +921,48 @@ function employeeClear() {
   changeStage("empId");
 }
 
-async function forceExecute() {
-  let targetPlatform = detectTargetPlatform();
-  if (targetPlatform == null) {
-    showCustomModal(t("請等待平台退回上料區"));
+function forceExecuted() {
+  Object.assign(forceCommand, { command: true, triggerTime: Date.now(), platformStatus: { right: targetPlatform.right.panel, left: targetPlatform.left.panel } });
+  sendSocketMessage("GO_NOGO", 1);
+  forceTimer = setInterval(async () => { sendSocketMessage("GO_NOGO", 1); }, 1000);
+}
+
+function forceScrapped() {
+  let target = onloadingPlatform.value;
+  let last_process_2DID_area = (PlatformState.up_out == 1) ? last_process_2DID.up : last_process_2DID.dn;
+  if (!target || ((target.left.panel == "" || target.left.panel == "等待掃描...") && (target.right.panel == "" || target.right.panel == "等待掃描..."))) {
+    showCustomModal(t("檯面上無製品，無法執行報廢。"));
     return;
   }
 
-  if (info.OK_num == info.panel_num || ((info.OK_num == info.panel_num - 1) && targetPlatform.left.ret_type === "OK" && targetPlatform.right.ret_type === "OK")) {
-    showCustomModal(t("作業後將達 PANEL 數上限，因此無法繼續執行。"));
-    return;
-  }
+  showConfirmModal(t("確定要將檯面上所有製品強制報廢(NG)嗎？此動作無法復原。"), async() => {
+    console.log("執行強制報廢...");
+    // if (target.left.panel != "" || target.left.panel != "等待掃描...") {
+    if (target.left.panel != "" || (last_process_2DID_area.left.panel == target.left.panel)) {
+      rec = { exitTime: Date.now(), workStepName: null, ret_type: "NG", workOrder: info.workOrder, item: info.productItem, detail: "強制報廢", action: "出" };
+      side_history_2DID_list.left.unshift({ ...rec, panel: target.right.panel });
+      Object.assign(side_history_2DID_dict.left[target.left.panel], { ...rec });
+      Object.assign(history_2DID_dict[target.left.panel], { ...rec });
+      sheetReport(target.right.panel, "NG", "強制報廢", formatToStringTime(history_2DID_dict[target.left.panel].entryTime), formatToStringTime(Date.now()));
+      Object.assign(target.left, { panel: "等待掃描...", ret_type: "", detail: "" });
+    }
+    // if (target.right.panel != "" || target.right.panel != "等待掃描...") {
+    if (target.right.panel != "" || (last_process_2DID_area.right.panel == target.right.panel)) {
+      rec = { exitTime: Date.now(), workStepName: null, ret_type: "NG", workOrder: info.workOrder, item: info.productItem, detail: "強制報廢", action: "出" };
+      side_history_2DID_list.right.unshift({ ...rec, panel: target.right.panel });
+      Object.assign(side_history_2DID_dict.right[target.left.panel], { ...rec });
+      Object.assign(history_2DID_dict[target.left.panel], { ...rec });
+      sheetReport(target.right.panel, "NG", "強制報廢", formatToStringTime(history_2DID_dict[target.right.panel].entryTime), formatToStringTime(Date.now()));
+      Object.assign(target.right, { panel: "等待掃描...", ret_type: "", detail: "" });
+    }
+  })
+}
 
-  if (targetPlatform.left.ret_type === "OK" || targetPlatform.right.ret_type === "OK") {
-    forceCommand.command = true;
-    forceCommand.triggerTime = Date.now();
-    sendSocketMessage("GO_NOGO", 1);
-    return;
-  }
-
-  showCustomModal(t("請放入至少放入一個OK製品"));
+function cancelForceCommand() {
+  forceCommand.command = false;
+  sendSocketMessage("GO_NOGO", 0);
+  clearInterval(forceTimer);
+  forceTimer = null;
 }
 
 const completeAllScanned = async () => {
@@ -847,12 +995,51 @@ const completeWorkorder = async () => {
   resetAll();
 }
 
+// ✅ [核心] 管理員登入驗證邏輯
+const handleAdminLogin = async () => {
+  if (!loginForm.empId || !loginForm.password) {
+    showCustomModal(t("請輸入帳號與密碼"));
+    return;
+  }
+
+  const empData = await validateEmpId(loginForm.empId);
+  if (empData) {
+    if (String(empData.empPW).trim() === String(loginForm.password).trim()) {
+      closeLoginModal();
+      onlineMode.value = false; // 切換至工程模式
+      
+      // 啟動 PLC 心跳 (模擬原本邏輯)
+      if (PLCEnabledTimer) clearInterval(PLCEnabledTimer);
+      PLCEnabledTimer = setInterval(() => { 
+        if (socket) sendSocketMessage("GO_NOGO", 1); 
+      }, 1000);
+
+      showCustomModal(t(`驗證成功：${empData.empName} 已進入工程模式`));
+    } else {
+      showCustomModal(t("密碼錯誤"));
+      loginForm.password = ''; // 清空密碼欄位方便重打
+    }
+  } else {
+    showCustomModal(t("密碼錯誤"));
+  }
+};
+const switchMode = async () => {
+  // 如果已經是工程模式 (onlineMode = false)，切回正常模式
+  if (!onlineMode.value) {
+    onlineMode.value = true;
+    if (PLCEnabledTimer) {
+      clearInterval(PLCEnabledTimer);
+      PLCEnabledTimer = null;
+    }
+    showCustomModal(t("已切換回正常作業模式"));
+    return;
+  }
+
+  openLoginModal();
+}
+
 // --- Window Control Function --- //
-onMounted(async () => {
-  loadingMessage.value = "正在與後台建立連線，請稍後...";
-  isLoading.value = true;
-  connectWebSocket(); 
-});
+onMounted(async () => { connectWebSocket(); });
 onUnmounted(() => {
   if (socket) socket.close();
 })
@@ -882,16 +1069,18 @@ html, body, #app { height: 100%; margin: 0; padding: 0; overflow: hidden; font-f
 .staging-row { margin-top: 1vh; }
 
 /* [New] Spacer for layout balance */
-.side-action-spacer { width: 80px; flex-shrink: 0; }
-/* [New] Container for the side action button (Force Execute) */
-.side-action-container { width: 80px; flex-shrink: 0; display: flex; justify-content: center; align-items: center; }
+.side-action-spacer { width: 70px; flex-shrink: 0; }
+.side-action-container { width: 70px; flex-shrink: 0; display: flex; justify-content: center; align-items: center; }
 
 /* ... (Info display styles) ... */
 .info-display-section-compact { padding-top: 1.5vh; padding-bottom: 1vh; }
 .panel-footer { padding-top: 1.5vh; border-top: 1px solid var(--panel-border); display: flex; justify-content: flex-end; gap: 1rem; }
-.info-grid-compact { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; }
 .info-label { font-size: 1.2rem; margin-bottom: 0.3rem; color: var(--label-color); }
 .info-value { font-size: 1.8rem; font-weight: bold; color: var(--primary-color); padding: 0.4rem 0.75rem; background: rgba(0, 0, 0, 0.2); border-radius: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.info-grid-compact { display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; }
+.info-display-group { display: flex; align-items: center; gap: 0.8rem; flex: 0 1 auto; width: auto; min-width: 200px; }
+.info-display-group.action-group { flex-shrink: 0; min-width: 320px; }
 
 /* ... (Toggle button and sheet count) ... */
 .toggle-button-wrapper { flex-shrink: 0; padding: 1.5vh 0; display: flex; justify-content: space-between; align-items: center; gap: 2rem; }
@@ -900,18 +1089,23 @@ html, body, #app { height: 100%; margin: 0; padding: 0; overflow: hidden; font-f
 
 /* ... (Main content layout) ... */
 .camera-section-main.adaptive-view { flex-grow: 1; min-height: 0; display: flex; justify-content: center; align-items: center; overflow: hidden; }
-.main-content-wrapper { display: flex; flex-direction: column; gap: 1.5vh; width: 100%; max-width: 1400px; }
+.main-content-wrapper { display: flex; flex-direction: column; gap: 1.5vh; width: 95%; max-width: 1400px; }
 .perspective-container { perspective: 1500px; }
 .zones-in-perspective { display: flex; flex-direction: column; transform: rotateX(20deg); transform-style: preserve-3d; }
 .zone-title { position: absolute; top: 0; left: 2rem; transform: translateY(-50%); background: #2a284e; padding: 0 0.75rem; margin: 0; color: var(--label-color); font-weight: bold; display: flex; align-items: center; gap: 0.75rem; font-size: clamp(0.9rem, 2.2vw, 2.2rem); z-index: 1; }
+/* 修改 .zone-title */
+/* .zone-title { position: absolute; top: 0; left: 0; width: 100%; transform: translateY(-50%); background: #2a284e; padding: 0 2rem; margin: 0; color: var(--label-color); font-weight: bold; display: flex; align-items: center; justify-content: center; font-size: clamp(0.9rem, 2.2vw, 2.2rem); z-index: 1; box-sizing: border-box; } */
+/* .zone-title-left-group { position: absolute; left: 2rem; display: flex; align-items: center; gap: 0.75rem; } */
+
 .staging-mode-indicator { font-size: clamp(1.1rem, 2.2vw, 1.6rem); padding: 0.3em 0.8em; border-radius: 4px; font-weight: bold; }
 .staging-mode-indicator.loading { background-color: var(--primary-color); color: #000; }
 .staging-mode-indicator.unloading { background-color: #9b59b6; color: #fff; }
+.stageing-platform-status { background-color: rgba(255, 27, 120, 0.15); color: var(--error-color); }
 .zone-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; }
 
 /* ... (Camera blocks and status) ... */
 .camera-block { background: rgba(0, 0, 0, 0.3); border: 2px solid var(--panel-border); border-radius: 12px; display: flex; flex-direction: column; align-items: center; justify-content: center; transition: all 0.4s ease; padding: 1vh 1rem; }
-.camera-block.staging { border-width: 4px; height: auto; min-height: 20vh; padding: 2vh 2rem; overflow-y: auto; }
+.camera-block.staging { border-width: 4px; height: auto; min-height: 20vh; padding: 1vh 1rem; overflow-y: auto; }
 .camera-block.status-success { border-color: var(--success-color); box-shadow: 0 0 10px var(--success-color); }
 .camera-block.status-error { border-color: var(--error-color); box-shadow: 0 0 10px var(--error-color); }
 .block-panel { word-break: break-all; font-weight: bold; color: var(--primary-color); font-size: clamp(1rem, 5.5vw, 2.5rem); font-family: 'Courier New', Courier, monospace; }
@@ -949,6 +1143,8 @@ html, body, #app { height: 100%; margin: 0; padding: 0; overflow: hidden; font-f
 @keyframes pulse-offline { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
 
 .btn { padding: 0.7rem 1.8rem; font-size: 1rem; border-radius: 8px; cursor: pointer; border: none; transition: all 0.2s ease; font-weight: bold; }
+.btn-mode.online { background-color: var(--primary-color); }
+.btn-mode.offline { background-color: var(--error-color); }
 .btn-resetuser, .btn-reset { background: transparent; color: var(--text-color); border: 2px solid var(--panel-border); }
 .btn-resetuser:hover, .btn-reset:hover { background-color: rgba(255,255,255,0.1); }
 .btn-complete { background: var(--primary-color); color: #000; }
@@ -961,10 +1157,11 @@ html, body, #app { height: 100%; margin: 0; padding: 0; overflow: hidden; font-f
 
 /* [New] Side danger button style */
 .btn-side-danger { width: 100%; height: 100%; min-height: 140px; border-radius: 8px; font-weight: bold; font-size: 1.2rem; background-color: rgba(255, 27, 120, 0.2); border: 2px solid var(--error-color); color: var(--error-color); cursor: pointer; transition: all 0.3s ease; white-space: pre-wrap; display: flex; align-items: center; justify-content: center; text-align: center; }
-.btn-side-danger:hover { background-color: var(--error-color); color: white; box-shadow: 0 0 15px var(--error-color); }
+.btn-side-danger:hover, .btn-side-danger.is-active { background-color: var(--error-color); color: white; box-shadow: 0 0 15px var(--error-color); }
 
 /* ... (Modal and Loading styles) ... */
 .window-wrapper { position: fixed; display: flex; justify-content: center; align-items: center; top: 0; left: 0; width: 100%; height: 100%; z-index: 1001; background-color: rgba(0, 0, 0, 0.7); }
+.window-wrapper.login-modal-wrapper { z-index: 1000; }
 .custom-modal { border: 1px solid var(--panel-border); background: var(--panel-bg); box-shadow: 0 0 40px var(--glow-color); backdrop-filter: blur(15px); color: var(--text-color); border-radius: 12px; padding: 2.5rem 3.5rem; width: clamp(300px, 60vw, 700px); max-width: 90%; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 1000; }
 .custom-modal::backdrop { background: rgba(0, 0, 0, 0.7); backdrop-filter: blur(8px); }
 .modal-content { display: flex; flex-direction: column; gap: 2rem; align-items: center; }
@@ -982,17 +1179,14 @@ html, body, #app { height: 100%; margin: 0; padding: 0; overflow: hidden; font-f
 .zone-row .platform-indicator-container { align-self: center; width: 80px; }
 .zone-row:first-child .platform-label { min-height: 80px; padding: 5px 5px; font-size: 1.1rem; }
 
-/* [新增] 讓工單與按鈕排成一列並垂直置中 */
-.info-display-group.action-group { display: flex; align-items: center; gap: 0.8rem; }
-
 /* [修改] 優化上方小按鈕樣式，讓它跟旁邊的大字體比較搭 */
 .btn-mini-danger {
   background-color: var(--error-color);
   color: white;
   border: none;
   /* 增加高度與 Padding，讓按鈕看起來不會太「縮」 */
-  padding: 0.4rem 1.2rem; 
-  font-size: 1.1rem; /* 字體加大 */
+  padding: 5px 10px; 
+  font-size: 16px; /* 字體加大 */
   border-radius: 6px;
   font-weight: bold;
   cursor: pointer;
@@ -1001,6 +1195,28 @@ html, body, #app { height: 100%; margin: 0; padding: 0; overflow: hidden; font-f
   transform: translateY(2px); /* 微調垂直位置，視情況增減 */
   transition: all 0.2s ease;
 }
-
+.btn-side-danger:disabled { border-color: var(--waiting-color); color: var(--waiting-color); background-color: rgba(108, 117, 125, 0.1); cursor: not-allowed; opacity: 0.5; box-shadow: none; pointer-events: none; }
 .btn-mini-danger:hover { background-color: #d01662; box-shadow: 0 0 10px var(--error-color); transform: translateY(1px); }
+
+/* --- Login Modal & Virtual Keyboard Styles --- */
+.login-modal-wrapper .custom-modal { width: 600px; max-width: 95%; padding: 1.5rem; }
+.modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; border-bottom: 1px solid var(--panel-border); padding-bottom: 0.5rem; }
+.modal-header h3 { margin: 0; color: var(--primary-color); }
+.btn-close { background: none; border: none; color: var(--text-color); font-size: 1.5rem; cursor: pointer; }
+.login-content { display: flex; flex-direction: column; gap: 1.5rem; }
+.input-section { display: flex; flex-direction: column; gap: 1rem; }
+.input-group { display: flex; flex-direction: column; gap: 0.5rem; padding: 0.5rem; border: 1px solid transparent; border-radius: 8px; transition: all 0.3s; }
+.input-group.active { border-color: var(--primary-color); background-color: rgba(41, 255, 196, 0.1); }
+.input-group label { font-size: 0.9rem; color: var(--label-color); }
+.input-group input { background: rgba(0, 0, 0, 0.3); border: 1px solid var(--panel-border); color: var(--primary-color); font-size: 1.5rem; padding: 0.5rem; border-radius: 4px; outline: none; letter-spacing: 2px; }
+
+/* 虛擬鍵盤 */
+.virtual-keyboard { display: flex; flex-direction: column; gap: 0.5rem; background: rgba(0,0,0,0.2); padding: 1rem; border-radius: 8px; }
+.keyboard-row { display: flex; justify-content: center; gap: 0.4rem; }
+.virtual-keyboard button { flex: 1; padding: 0.8rem 0; font-size: 1.2rem; font-weight: bold; background-color: rgba(255, 255, 255, 0.1); border: 1px solid var(--panel-border); color: var(--text-color); border-radius: 6px; cursor: pointer; min-width: 40px; /* 防止按鈕太小 */ transition: background 0.1s; }
+.virtual-keyboard button:active { background-color: var(--primary-color); color: #000; }
+.virtual-keyboard .caps-lock { font-size: 0.9rem; background-color: rgba(255, 255, 255, 0.1); transition: all 0.2s; }
+.virtual-keyboard .caps-lock.active { background-color: var(--primary-color); color: #000; box-shadow: 0 0 10px var(--primary-color); border-color: var(--primary-color); }
+.virtual-keyboard .btn-func { flex: 1.5; font-weight: bold; }
+.login-actions { margin-top: 1rem; }
 </style>

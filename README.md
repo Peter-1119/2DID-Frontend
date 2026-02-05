@@ -45,7 +45,7 @@
 1.  **Clone 專案**
     ```bash
     git clone [https://github.com/YourUsername/lpsm-2did-system.git](https://github.com/YourUsername/lpsm-2did-system.git)
-    cd lpsm-2did-system
+    cd 2DID-Frontend
     ```
 
 2.  **安裝依賴**
